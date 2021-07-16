@@ -1,0 +1,152 @@
+#include <utility>
+#include <iostream>
+#include <termios.h>
+
+//
+// Created by imper on 6/12/21.
+//
+
+#ifndef KAZKUEME_LOG_CONSOLE_HPP
+#define KAZKUEME_LOG_CONSOLE_HPP
+
+template <typename T, T val>
+struct val_is
+{
+	static constexpr T value = val;
+};
+
+template <typename T>
+struct type_is
+{
+	using type = T;
+};
+
+template <bool, auto T_val, auto>
+struct choose_val : val_is<decltype(T_val), T_val>
+{
+};
+
+template <auto T_val, auto F_val>
+struct choose_val<false, T_val, F_val> : val_is<decltype(F_val), F_val>
+{
+};
+
+template <bool, typename T>
+struct enable_if : type_is<T>
+{
+};
+
+template <typename T>
+struct enable_if<false, T>
+{
+};
+
+template <bool expr, typename T>
+using enable_if_t = typename enable_if<expr, T>::type;
+
+#define l_location std::pair<const char*, std::pair<const char*, int>>(__FILE__, {__func__, __LINE__})
+#define l_time std::pair<const char*, const char*>(__DATE__, __TIME__)
+
+namespace color
+{
+	static constexpr const char* reset = "\033[0m";
+	static constexpr const char* bold = "\033[1m";
+	static constexpr const char* light = "\033[2m";
+	static constexpr const char* italic = "\033[3m";
+	static constexpr const char* underlined = "\033[4m";
+	static constexpr const char* blinking = "\033[5m";
+	static constexpr const char* default_bg = "\033[7m";
+	static constexpr const char* strikeout = "\033[9m";
+	static constexpr const char* red = "\033[31m";
+	static constexpr const char* green = "\033[32m";
+	static constexpr const char* yellow = "\033[33m";
+	static constexpr const char* blue = "\033[34m";
+	static constexpr const char* purple = "\033[35m";
+	static constexpr const char* aqua = "\033[36m";
+	static constexpr const char* white = "\033[37m";
+	static constexpr const char* black_bg = "\033[40m";
+	static constexpr const char* red_bg = "\033[41m";
+	static constexpr const char* green_bg = "\033[42m";
+	static constexpr const char* yellow_bg = "\033[43m";
+	static constexpr const char* blue_bg = "\033[44m";
+	static constexpr const char* purple_bg = "\033[45m";
+	static constexpr const char* aqua_bg = "\033[46m";
+	static constexpr const char* white_bg = "\033[47m";
+}
+
+class log_console
+{
+public:
+	bool time = false;
+	bool location = false;
+	
+	explicit log_console(int output_stream_socket);
+	
+	explicit log_console(FILE* output_stream);
+	
+	inline const std::pair<log_console&, std::true_type>& operator<<(const std::remove_cvref_t<decltype(l_location)>& location);
+	
+	inline const std::pair<log_console&, std::true_type>& operator<<(const std::remove_cvref_t<decltype(l_time)>& time);
+	
+	inline log_console& operator<<(const std::string& str);
+	
+	inline log_console& operator<<(const char* str);
+	
+	inline log_console& operator<<(bool boolean);
+	
+	template <typename type>
+	inline enable_if_t<std::is_integral_v<type>, log_console&> operator<<(type num);
+	
+	template <typename type>
+	inline enable_if_t<std::is_floating_point_v<type>, log_console&> operator<<(type num);
+	
+	~log_console();
+	
+	void print(const std::string& str) const;
+	
+	
+	static inline void setting_stdin();
+	
+	static inline void setting_stdout();
+	
+	static inline void setting_stderr();
+	
+	static inline void reset_all();
+	
+	
+	static constexpr char color_int_t[]{"\033[35m"};
+	static constexpr char color_float_t[]{"\033[34m"};
+	static constexpr char color_l_location[]{"\033[35m\033[2m"};
+	static constexpr char color_l_location_separator[]{"\033[33m\033[2m"};
+	static constexpr char color_l_time[]{"\033[35m\033[2m"};
+	static constexpr char color_l_time_separator[]{"\033[33m\033[2m"};
+	static constexpr char color_bool_true[]{"\033[32m"};
+	static constexpr char color_bool_false[]{"\033[31m"};
+
+private:
+	static struct termios* stdin_defaults;
+	static struct termios* stdout_defaults;
+	static struct termios* stderr_defaults;
+	
+	FILE* output_stream;
+};
+
+// static operators
+
+inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, const std::string& str);
+
+const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, const char* str);
+
+inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, const decltype(l_location)& location);
+
+inline log_console& operator<<(const std::pair<log_console&, std::true_type>& logger, const decltype(l_time)& time);
+
+inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, bool boolean);
+
+template <typename type>
+inline enable_if_t<std::is_integral_v<type>, const std::pair<log_console&, std::true_type>&> operator<<(const std::pair<log_console&, std::true_type>& logger, type num);
+
+template <typename type>
+inline enable_if_t<std::is_floating_point_v<type>, const std::pair<log_console&, std::true_type>&> operator<<(const std::pair<log_console&, std::true_type>& logger, type num);
+
+#endif //KAZKUEME_LOG_CONSOLE_HPP
