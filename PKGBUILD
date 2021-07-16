@@ -12,11 +12,6 @@ source=("local://log-console")
 md5sums=("SKIP")
 # install=log-console.install
 
-build()
-{
-#   don't build the project
-}
-
 package()
 {
 	install -Dm755 "./$pkgname" "$pkgdir/usr/include/$pkgname"

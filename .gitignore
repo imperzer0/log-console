@@ -1,0 +1,4 @@
+# excluded package build files
+/pkg
+/src
+/*.pkg.tar.zst
