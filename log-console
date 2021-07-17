@@ -77,6 +77,14 @@ namespace color
 class log_console
 {
 public:
+	enum l_flags : unsigned long
+	{
+		l_lock,
+		l_unlock,
+		l_flush,
+		l_endl
+	};
+	
 	bool time = false;
 	bool location = false;
 	
@@ -94,6 +102,8 @@ public:
 	
 	inline log_console& operator<<(bool boolean);
 	
+	inline log_console& operator<<(l_flags flag);
+	
 	template <typename type>
 	inline enable_if_t<std::is_integral_v<type>, log_console&> operator<<(type num);
 	
@@ -102,8 +112,13 @@ public:
 	
 	~log_console();
 	
-	void print(const std::string& str) const;
+	inline void print(const std::string& str) const;
 	
+	inline void flush();
+	
+	static inline void lock();
+	
+	static inline void unlock();
 	
 	static inline void setting_stdin();
 	
@@ -128,8 +143,12 @@ private:
 	static struct termios* stdout_defaults;
 	static struct termios* stderr_defaults;
 	
+	static pthread_mutex_t mutex;
+	
 	FILE* output_stream;
 };
+
+pthread_mutex_t log_console::mutex = PTHREAD_MUTEX_INITIALIZER;
 
 log_console::log_console(int output_stream_socket) : output_stream(::fdopen(output_stream_socket, "wb"))
 { }
@@ -186,6 +205,23 @@ log_console& log_console::operator<<(bool boolean)
 	return *this;
 }
 
+log_console& log_console::operator<<(log_console::l_flags flag)
+{
+	switch (flag)
+	{
+		case log_console::l_flags::l_lock:
+			log_console::lock();
+			break;
+		case log_console::l_flags::l_unlock:
+			log_console::unlock();
+			break;
+		case log_console::l_flags::l_flush:
+			this->flush();
+			break;
+	}
+	return *this;
+}
+
 template <typename type>
 enable_if_t<std::is_floating_point_v<type>, log_console&> log_console::operator<<(type num)
 {
@@ -212,6 +248,21 @@ log_console::~log_console()
 void log_console::print(const std::string& str) const
 {
 	::fwrite(str.c_str(), sizeof(char), str.size(), output_stream);
+}
+
+void log_console::flush()
+{
+	::fflush(this->output_stream);
+}
+
+void log_console::lock()
+{
+	pthread_mutex_lock(&log_console::mutex);
+}
+
+void log_console::unlock()
+{
+	pthread_mutex_unlock(&log_console::mutex);
 }
 
 struct termios* log_console::stdin_defaults = nullptr;
@@ -322,27 +373,27 @@ const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_co
 
 inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, const decltype(l_location)& location)
 {
-	logger.first.print(
-			(logger.first.time ? std::string() : std::string("\n")) + log_console::color_l_location + location.first
-			+ log_console::color_l_location_separator + "::" + log_console::color_l_location + location.second.first + "()"
-			+ log_console::color_l_location_separator + "::" + log_console::color_l_location + std::to_string(location.second.second)
-			+ color::reset + "\n+-->"
-	);
-	logger.first.time = false;
-	logger.first.location = true;
-	return logger;
+logger.first.print(
+(logger.first.time ? std::string() : std::string("\n")) + log_console::color_l_location + location.first
++ log_console::color_l_location_separator + "::" + log_console::color_l_location + location.second.first + "()"
++ log_console::color_l_location_separator + "::" + log_console::color_l_location + std::to_string(location.second.second)
++ color::reset + "\n+-->"
+);
+logger.first.time = false;
+logger.first.location = true;
+return logger;
 }
 
 inline log_console& operator<<(const std::pair<log_console&, std::true_type>& logger, const decltype(l_time)& time)
 {
-	logger.first.print(
-			(logger.first.location ? std::string() : std::string("\n")) + log_console::color_l_time + time.first
-			+ log_console::color_l_time_separator + "  " + log_console::color_l_time + time.second
-			+ color::reset + "\t"
-	);
-	logger.first.time = true;
-	logger.first.location = false;
-	return logger.first;
+logger.first.print(
+(logger.first.location ? std::string() : std::string("\n")) + log_console::color_l_time + time.first
++ log_console::color_l_time_separator + "  " + log_console::color_l_time + time.second
++ color::reset + "\t"
+);
+logger.first.time = true;
+logger.first.location = false;
+return logger.first;
 }
 
 inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, bool boolean)
@@ -350,6 +401,27 @@ inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair
 	logger.first.print((boolean ? std::string(log_console::color_bool_true) + " true" : std::string(log_console::color_bool_false) + " false") + color::reset);
 	logger.first.time = false;
 	logger.first.location = false;
+	return logger;
+}
+
+inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::l_flags flag)
+{
+	switch (flag)
+	{
+		case log_console::l_flags::l_lock:
+			log_console::lock();
+			break;
+		case log_console::l_flags::l_unlock:
+			log_console::unlock();
+			break;
+		case log_console::l_flags::l_flush:
+			logger.first.flush();
+			break;
+		case log_console::l_flags::l_endl:
+			logger.first.print("\n");
+			logger.first.flush();
+			break;
+	}
 	return logger;
 }
 
