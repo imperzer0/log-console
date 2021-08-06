@@ -2,3 +2,6 @@
 /pkg
 /src
 /*.pkg.tar.zst
+CMakeLists.txt
+main.cpp
+cmake-build-*/
