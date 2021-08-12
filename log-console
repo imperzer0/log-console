@@ -39,6 +39,45 @@ struct enable_if<false, T>
 {
 };
 
+struct check_for_unary_minus
+{
+	template <typename U, typename = decltype(-std::declval<U>())>
+	static constexpr std::true_type perform(U&& u)
+	{
+		return std::true_type();
+	}
+	
+	static constexpr std::false_type perform(...)
+	{
+		return std::false_type();
+	}
+};
+
+struct check_for_less
+{
+	template <typename U, typename = decltype(std::declval<const U&>() < std::declval<const U&>())>
+	static constexpr std::true_type perform(U&& u)
+	{
+		return std::true_type();
+	}
+	
+	static constexpr std::false_type perform(...)
+	{
+		return std::false_type();
+	}
+};
+
+template <typename char_t>
+static constexpr size_t static_strlen(const char_t* str)
+{
+	size_t size(0);
+	for (; *str; ++str)
+	{
+		++size;
+	}
+	return size;
+}
+
 template <bool expr, typename T> using enable_if_t = typename enable_if<expr, T>::type;
 
 #define l_location std::pair<const char*, std::pair<const char*, int>>(__FILE__, {__func__, __LINE__})
@@ -70,10 +109,14 @@ namespace color
 	static constexpr const char* aqua_bg    = "\033[46m";
 	static constexpr const char* white_bg   = "\033[47m";
 }
+
 class log_console
 {
 public:
 	typedef void               (* state_change_function)(log_console& logger);
+	
+	template <typename T>
+	using val_set_function = void (*)(log_console& logger, T val);
 	
 	enum l_flags : unsigned long
 	{
@@ -91,6 +134,47 @@ public:
 	inline void print(const char& char_) const;
 	
 	inline void flush();
+	
+	template <typename num_t>
+	static inline constexpr num_t abs(num_t num);
+	
+	template <typename int_t>
+	[[nodiscard]] static enable_if_t<std::is_integral_v<int_t>, std::string&> integral_to_string(int_t value, int radix);
+	
+	static inline void set_base(log_console& logger, int base)
+	{
+		logger.base = base;
+	}
+	
+	static inline void hex(log_console& logger)
+	{
+		logger.base = 16;
+	}
+	
+	static inline void dec(log_console& logger)
+	{
+		logger.base = 10;
+	}
+	
+	static inline void oct(log_console& logger)
+	{
+		logger.base = 8;
+	}
+	
+	static inline void tetra(log_console& logger)
+	{
+		logger.base = 4;
+	}
+	
+	static inline void bin(log_console& logger)
+	{
+		logger.base = 2;
+	}
+	
+	static inline void flush(log_console& logger)
+	{
+		logger.flush();
+	}
 	
 	static inline void lock();
 	
@@ -121,6 +205,23 @@ public:
 	{ logger.is_logging_on = false; }
 
 private:
+	friend inline log_console& operator<<(log_console& logger, log_console::state_change_function state_change_function);
+	
+	friend inline const std::pair<log_console&, std::true_type>&
+	operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::state_change_function state_change_function);
+	
+	template <typename T>
+	friend inline const std::pair<log_console&, log_console::val_set_function<T>>&
+	operator<<(log_console& logger, log_console::val_set_function<T> val_set_function);
+	
+	template <typename T>
+	friend inline const std::pair<log_console&, log_console::val_set_function<T>>&
+	operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::val_set_function<T> val_set_function);
+	
+	template <typename T>
+	friend inline const std::pair<log_console&, std::true_type>&
+	operator<<(const std::pair<log_console&, log_console::val_set_function<T>>& logger, T val);
+	
 	friend inline const std::pair<log_console&, std::true_type>&
 	operator<<(log_console& logger, const std::remove_cvref_t<decltype(l_location)>& location);
 	
@@ -155,14 +256,17 @@ private:
 	template <typename type>
 	friend const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, type num);
 	
+	static constexpr const char* base36 = "0123456789abcdefghijklmnopqrstuvwxyz";
+	static constexpr size_t BASE = static_strlen(base36);
 	static struct termios* stdin_defaults;
 	static struct termios* stdout_defaults;
 	static struct termios* stderr_defaults;
 	static pthread_mutex_t mutex;
 	FILE* output_stream;
-	bool is_logging_on = true;
-	bool time          = false;
-	bool location      = false;
+	bool     is_logging_on = true;
+	bool     time          = false;
+	bool     location      = false;
+	unsigned base          = 10;
 };
 
 pthread_mutex_t log_console::mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -179,12 +283,54 @@ log_console::~log_console()
 void log_console::print(const std::string& str) const
 { ::fwrite(str.c_str(), sizeof(char), str.size(), output_stream); }
 
-
 void log_console::print(const char& char_) const
 { ::fwrite(&char_, sizeof(char_), 1, output_stream); }
 
 void log_console::flush()
 { ::fflush(this->output_stream); }
+
+template <typename num_t>
+constexpr num_t log_console::abs(num_t num)
+{
+	static_assert(check_for_less::perform(num), "can't find less operator for passed object type");
+	static_assert(check_for_unary_minus::perform(num), "can't find unary minus operator for passed object type");
+	if (num < 0)
+	{
+		return -num;
+	}
+	else
+	{
+		return num;
+	}
+}
+
+template <typename int_t>
+enable_if_t<std::is_integral_v<int_t>, std::string&> log_console::integral_to_string(int_t value, int radix)
+{
+	auto* result = new std::string;
+	if (radix > 0 && radix <= BASE)
+	{
+		bool negative = value < 0;
+		while (value != 0)
+		{
+			int remainder = log_console::abs(value % radix);
+			value /= radix;
+			result->insert(result->begin(), log_console::base36[remainder]);
+		}
+		
+		
+		if (negative)
+		{
+			result->insert(result->begin(), '-');
+		}
+		
+	}
+	else
+	{
+		*result = "<invalid_base>";
+	}
+	return *result;
+}
 
 void log_console::lock()
 { pthread_mutex_lock(&log_console::mutex); }
@@ -256,17 +402,49 @@ void log_console::reset_all()
 
 // static operators
 
-inline log_console& operator<<(log_console& logger, const log_console::state_change_function& state_change_function)
+inline log_console& operator<<(log_console& logger, log_console::state_change_function state_change_function)
 {
+	logger.time     = false;
+	logger.location = false;
 	state_change_function(logger);
 	return logger;
 }
 
 inline const std::pair<log_console&, std::true_type>&
-operator<<(const std::pair<log_console&, std::true_type>& logger, const log_console::state_change_function& state_change_function)
+operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::state_change_function state_change_function)
 {
+	logger.first.time     = false;
+	logger.first.location = false;
 	state_change_function(logger.first);
 	return logger;
+}
+
+template <typename T>
+inline const std::pair<log_console&, log_console::val_set_function<T>>&
+operator<<(log_console& logger, log_console::val_set_function<T> val_set_function)
+{
+	logger.time     = false;
+	logger.location = false;
+	return *new std::remove_cvref_t<decltype(operator<<(logger, val_set_function))>(logger, val_set_function);
+}
+
+template <typename T>
+inline const std::pair<log_console&, log_console::val_set_function<T>>&
+operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::val_set_function<T> val_set_function)
+{
+	logger.first.time     = false;
+	logger.first.location = false;
+	return *new std::remove_cvref_t<decltype(operator<<(logger, val_set_function))>{logger.first, val_set_function};
+}
+
+template <typename T>
+inline const std::pair<log_console&, std::true_type>&
+operator<<(const std::pair<log_console&, log_console::val_set_function<T>>& logger, T val)
+{
+	logger.first.time     = false;
+	logger.first.location = false;
+	logger.second(logger.first, val);
+	return *new std::remove_cvref_t<decltype(operator<<(logger, val))>{logger.first, std::true_type()};
 }
 
 inline const std::pair<log_console&, std::true_type>& operator<<(log_console& logger, const std::remove_cvref_t<decltype(l_location)>& location)
@@ -390,7 +568,8 @@ inline log_console& operator<<(log_console& logger, bool boolean)
 	if (logger.is_logging_on)
 	{
 		logger.print(
-				(boolean ? std::string(log_console::color_bool_true) + " true" : std::string(log_console::color_bool_false) + " false") + color::reset
+				(boolean ? std::string(log_console::color_bool_true) + " true" : std::string(log_console::color_bool_false) + " false")
+				+ color::reset
 		);
 		logger.time     = false;
 		logger.location = false;
@@ -402,8 +581,8 @@ inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair
 {
 	if (logger.first.is_logging_on)
 	{
-		logger.first.print((boolean ? std::string(log_console::color_bool_true) + " true" : std::string(log_console::color_bool_false) + " false") +
-						   color::reset
+		logger.first.print((boolean ? std::string(log_console::color_bool_true) + " true" : std::string(log_console::color_bool_false) + " false")
+						   + color::reset
 		);
 		logger.first.time     = false;
 		logger.first.location = false;
@@ -484,20 +663,25 @@ log_console& operator<<(log_console& logger, type num)
 {
 	if (logger.is_logging_on)
 	{
+		logger.time     = false;
+		logger.location = false;
+		
 		if constexpr(std::is_same_v<type, char>)
 		{
 			logger.print(num);
 		}
 		else if constexpr(std::is_integral_v<type>)
 		{
-			logger.print(log_console::color_int_t + std::string(" ") + std::to_string(num) + color::reset);
+			logger.print(log_console::color_int_t + log_console::integral_to_string(num, logger.base) + color::reset);
 		}
 		else if constexpr(std::is_floating_point_v<type>)
 		{
-			logger.print(log_console::color_float_t + std::string(" ") + std::to_string(num) + color::reset);
+			logger.print(log_console::color_float_t + log_console::integral_to_string(num, logger.base) + color::reset);
 		}
-		logger.time     = false;
-		logger.location = false;
+		else
+		{
+			logger.print(num);
+		}
 	}
 	return logger;
 }
@@ -507,6 +691,8 @@ const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_co
 {
 	if (logger.first.is_logging_on)
 	{
+		logger.first.time     = false;
+		logger.first.location = false;
 		
 		if constexpr(std::is_same_v<type, char>)
 		{
@@ -514,14 +700,12 @@ const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_co
 		}
 		else if constexpr(std::is_integral_v<type>)
 		{
-			logger.first.print(log_console::color_int_t + std::string(" ") + std::to_string(num) + color::reset);
+			logger.first.print(log_console::color_int_t + log_console::integral_to_string(num, logger.first.base) + color::reset);
 		}
 		else if constexpr(std::is_floating_point_v<type>)
 		{
-			logger.first.print(log_console::color_float_t + std::string(" ") + std::to_string(num) + color::reset);
+			logger.first.print(log_console::color_float_t + log_console::integral_to_string(num, logger.first.base) + color::reset);
 		}
-		logger.first.time     = false;
-		logger.first.location = false;
 	}
 	return logger;
 }
