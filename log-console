@@ -113,7 +113,7 @@ namespace color
 class log_console
 {
 public:
-	typedef void               (* state_change_function)(log_console& logger);
+	using state_change_function = void (*)(log_console& logger);
 	
 	template <typename T>
 	using val_set_function = void (*)(log_console& logger, T val);

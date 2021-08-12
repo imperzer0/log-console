@@ -1,7 +1,7 @@
 pkgname="log-console"
 epoch=1
 pkgver=6
-pkgrel=1
+pkgrel=2
 pkgdesc="console logger static library"
 arch=("x86_64")
 url="https://github.com/imperzer0/log-console"
