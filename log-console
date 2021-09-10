@@ -93,6 +93,7 @@ namespace color
 	static constexpr const char* blinking   = "\033[5m";
 	static constexpr const char* default_bg = "\033[7m";
 	static constexpr const char* strikeout  = "\033[9m";
+	static constexpr const char* black      = "\033[30m";
 	static constexpr const char* red        = "\033[31m";
 	static constexpr const char* green      = "\033[32m";
 	static constexpr const char* yellow     = "\033[33m";
@@ -110,6 +111,28 @@ namespace color
 	static constexpr const char* white_bg   = "\033[47m";
 }
 
+static constexpr const char* terminal_control_char = "\033[";
+
+namespace move
+{
+	static constexpr const char* up       = "\033[1A";
+	static constexpr const char* down     = "\033[1B";
+	static constexpr const char* forward  = "\033[1C";
+	static constexpr const char* backward = "\033[1D";
+}
+
+namespace clear
+{
+	static constexpr const char* to_the_top = "\033[1J";
+	static constexpr const char* all = "\033[2J";
+}
+
+namespace position
+{
+	static constexpr const char* save = "\033[s";
+	static constexpr const char* restore = "\033[u";
+}
+
 class log_console
 {
 public:
@@ -120,7 +143,7 @@ public:
 	
 	enum l_flags : unsigned long
 	{
-		l_lock, l_unlock, l_flush, l_endl, l_locendl, l_endent
+		l_lock, l_unlock, l_flush, l_endl, l_locendl, l_endent, l_color, l_nocolor, l_nlarrow, l_nonlarrow
 	};
 	
 	explicit log_console(int output_stream_socket);
@@ -267,6 +290,8 @@ private:
 	bool     time          = false;
 	bool     location      = false;
 	unsigned base          = 10;
+	bool     colorful      = true;
+	bool     enablearrow   = true;
 };
 
 pthread_mutex_t log_console::mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -451,11 +476,20 @@ inline const std::pair<log_console&, std::true_type>& operator<<(log_console& lo
 {
 	if (logger.is_logging_on)
 	{
-		logger.print((logger.location ? std::string() : std::string("\n")) + log_console::color_l_location + location.first +
-					 log_console::color_l_location_separator + "::" + log_console::color_l_location + location.second.first +
-					 log_console::color_l_location_separator + "::" + log_console::color_l_location + std::to_string(location.second.second) +
-					 color::reset + "\n+--> "
-		);
+		if (logger.colorful)
+		{
+			logger.print((logger.location ? std::string() : std::string("\n")) + log_console::color_l_location + location.first +
+						 log_console::color_l_location_separator + "::" + log_console::color_l_location + location.second.first +
+						 log_console::color_l_location_separator + "::" + log_console::color_l_location + std::to_string(location.second.second) +
+						 color::reset + "\n+--> "
+			);
+		}
+		else
+		{
+			logger.print((logger.location ? std::string() : std::string("\n")) + location.first + "::" + location.second.first +
+						 "::" + std::to_string(location.second.second) + "\n+--> "
+			);
+		}
 		logger.time     = false;
 		logger.location = true;
 	}
@@ -467,11 +501,21 @@ operator<<(const std::pair<log_console&, std::true_type>& logger, const decltype
 {
 	if (logger.first.is_logging_on)
 	{
-		logger.first.print((logger.first.time ? std::string() : std::string("\n")) + log_console::color_l_location + location.first +
-						   log_console::color_l_location_separator + "::" + log_console::color_l_location + location.second.first + "()" +
-						   log_console::color_l_location_separator + "::" + log_console::color_l_location + std::to_string(location.second.second) +
-						   color::reset + "\n+-->  "
-		);
+		if (logger.first.colorful)
+		{
+			logger.first.print((logger.first.time ? std::string() : std::string("\n")) + log_console::color_l_location + location.first +
+							   log_console::color_l_location_separator + "::" + log_console::color_l_location + location.second.first + "()" +
+							   log_console::color_l_location_separator + "::" + log_console::color_l_location +
+							   std::to_string(location.second.second) +
+							   color::reset + "\n+-->  "
+			);
+		}
+		else
+		{
+			logger.first.print((logger.first.time ? std::string() : std::string("\n")) + location.first + "::" + location.second.first + "()" +
+							   "::" + std::to_string(location.second.second) + "\n+-->  "
+			);
+		}
 		logger.first.time     = false;
 		logger.first.location = true;
 	}
@@ -482,10 +526,17 @@ inline const std::pair<log_console&, std::true_type>& operator<<(log_console& lo
 {
 	if (logger.is_logging_on)
 	{
-		logger.print(
-				(logger.time ? std::string() : std::string("\n")) + log_console::color_l_time + time.first + log_console::color_l_time_separator +
-				"::" + log_console::color_l_time + time.second + color::reset + "\t"
-		);
+		if (logger.colorful)
+		{
+			logger.print(
+					(logger.time ? std::string() : std::string("\n")) + log_console::color_l_time + time.first + log_console::color_l_time_separator +
+					"::" + log_console::color_l_time + time.second + color::reset + "\t"
+			);
+		}
+		else
+		{
+			logger.print((logger.time ? std::string() : std::string("\n")) + time.first + "::" + time.second + "\t");
+		}
 		logger.time     = true;
 		logger.location = false;
 	}
@@ -496,9 +547,16 @@ inline log_console& operator<<(const std::pair<log_console&, std::true_type>& lo
 {
 	if (logger.first.is_logging_on)
 	{
-		logger.first.print((logger.first.location ? std::string() : std::string("\n")) + log_console::color_l_time + time.first +
-						   log_console::color_l_time_separator + "  " + log_console::color_l_time + time.second + color::reset + "\t"
-		);
+		if (logger.first.colorful)
+		{
+			logger.first.print((logger.first.location ? std::string() : std::string("\n")) + log_console::color_l_time + time.first +
+							   log_console::color_l_time_separator + "  " + log_console::color_l_time + time.second + color::reset + "\t"
+			);
+		}
+		else
+		{
+			logger.first.print((logger.first.location ? std::string() : std::string("\n")) + time.first + "  " + time.second + "\t");
+		}
 		logger.first.time     = true;
 		logger.first.location = false;
 	}
@@ -520,14 +578,21 @@ inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair
 {
 	if (logger.first.is_logging_on)
 	{
-		std::string copy;
-		for (char   i : str)
+		if (logger.first.enablearrow)
 		{
-			copy += i;
-			if (i == '\n')
-			{ copy += log_console::log_arrow; }
+			std::string copy;
+			for (auto& i : str)
+			{
+				copy += i;
+				if (i == '\n')
+				{ copy += log_console::log_arrow; }
+			}
+			logger.first.print(copy);
 		}
-		logger.first.print(copy);
+		else
+		{
+			logger.first.print(str);
+		}
 		logger.first.time     = false;
 		logger.first.location = false;
 	}
@@ -549,14 +614,21 @@ const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_co
 {
 	if (logger.first.is_logging_on)
 	{
-		std::string copy;
-		for (; *str; ++str)
+		if (logger.first.enablearrow)
 		{
-			copy += *str;
-			if (*str == '\n')
-			{ copy += log_console::log_arrow; }
+			std::string copy;
+			for (; *str; ++str)
+			{
+				copy += *str;
+				if (*str == '\n')
+				{ copy += log_console::log_arrow; }
+			}
+			logger.first.print(copy);
 		}
-		logger.first.print(copy);
+		else
+		{
+			logger.first.print(str);
+		}
 		logger.first.time     = false;
 		logger.first.location = false;
 	}
@@ -567,10 +639,17 @@ inline log_console& operator<<(log_console& logger, bool boolean)
 {
 	if (logger.is_logging_on)
 	{
-		logger.print(
-				(boolean ? std::string(log_console::color_bool_true) + " true" : std::string(log_console::color_bool_false) + " false")
-				+ color::reset
-		);
+		if (logger.colorful)
+		{
+			logger.print(
+					(boolean ? std::string(log_console::color_bool_true) + " true" : std::string(log_console::color_bool_false) + " false")
+					+ color::reset
+			);
+		}
+		else
+		{
+			logger.print(boolean ? " true" : " false");
+		}
 		logger.time     = false;
 		logger.location = false;
 	}
@@ -581,9 +660,16 @@ inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair
 {
 	if (logger.first.is_logging_on)
 	{
-		logger.first.print((boolean ? std::string(log_console::color_bool_true) + " true" : std::string(log_console::color_bool_false) + " false")
-						   + color::reset
-		);
+		if (logger.first.colorful)
+		{
+			logger.first.print((boolean ? std::string(log_console::color_bool_true) + " true" : std::string(log_console::color_bool_false) + " false")
+							   + color::reset
+			);
+		}
+		else
+		{
+			logger.first.print(boolean ? " true" : " false");
+		}
 		logger.first.time     = false;
 		logger.first.location = false;
 	}
@@ -619,6 +705,18 @@ inline log_console& operator<<(log_console& logger, log_console::l_flags flag)
 				logger.flush();
 				log_console::unlock();
 				break;
+			case log_console::l_flags::l_color:
+				logger.colorful = true;
+				break;
+			case log_console::l_flags::l_nocolor:
+				logger.colorful = false;
+				break;
+			case log_console::l_flags::l_nlarrow:
+				logger.enablearrow = true;
+				break;
+			case log_console::l_flags::l_nonlarrow:
+				logger.enablearrow = false;
+				break;
 		}
 	}
 	return logger;
@@ -653,6 +751,17 @@ inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair
 				logger.first.flush();
 				log_console::unlock();
 				break;
+			case log_console::l_flags::l_color:
+				logger.first.colorful = true;
+				break;
+			case log_console::l_flags::l_nocolor:
+				logger.first.colorful = false;
+				break;
+			case log_console::l_flags::l_nlarrow:
+				logger.first.enablearrow = true;
+				break;
+			case log_console::l_flags::l_nonlarrow:
+				logger.first.enablearrow = false;
 		}
 	}
 	return logger;
@@ -672,11 +781,17 @@ log_console& operator<<(log_console& logger, type num)
 		}
 		else if constexpr(std::is_integral_v<type>)
 		{
-			logger.print(log_console::color_int_t + log_console::integral_to_string(num, logger.base) + color::reset);
+			if (logger.colorful)
+				logger.print(log_console::color_int_t + log_console::integral_to_string(num, logger.base) + color::reset);
+			else
+				logger.print(log_console::integral_to_string(num, logger.base));
 		}
 		else if constexpr(std::is_floating_point_v<type>)
 		{
-			logger.print(log_console::color_float_t + log_console::integral_to_string(num, logger.base) + color::reset);
+			if (logger.colorful)
+				logger.print(log_console::color_float_t + log_console::integral_to_string(num, logger.base) + color::reset);
+			else
+				logger.print(log_console::integral_to_string(num, logger.base));
 		}
 		else
 		{
@@ -700,11 +815,17 @@ const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_co
 		}
 		else if constexpr(std::is_integral_v<type>)
 		{
-			logger.first.print(log_console::color_int_t + log_console::integral_to_string(num, logger.first.base) + color::reset);
+			if (logger.first.colorful)
+				logger.first.print(log_console::color_int_t + log_console::integral_to_string(num, logger.first.base) + color::reset);
+			else
+				logger.first.print(log_console::integral_to_string(num, logger.first.base));
 		}
 		else if constexpr(std::is_floating_point_v<type>)
 		{
-			logger.first.print(log_console::color_float_t + log_console::integral_to_string(num, logger.first.base) + color::reset);
+			if (logger.first.colorful)
+				logger.first.print(log_console::color_float_t + log_console::integral_to_string(num, logger.first.base) + color::reset);
+			else
+				logger.first.print(log_console::integral_to_string(num, logger.first.base));
 		}
 	}
 	return logger;
