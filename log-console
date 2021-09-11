@@ -124,12 +124,12 @@ namespace move
 namespace clear
 {
 	static constexpr const char* to_the_top = "\033[1J";
-	static constexpr const char* all = "\033[2J";
+	static constexpr const char* all        = "\033[2J";
 }
 
 namespace position
 {
-	static constexpr const char* save = "\033[s";
+	static constexpr const char* save    = "\033[s";
 	static constexpr const char* restore = "\033[u";
 }
 
@@ -143,7 +143,7 @@ public:
 	
 	enum l_flags : unsigned long
 	{
-		l_lock, l_unlock, l_flush, l_endl, l_locendl, l_endent, l_color, l_nocolor, l_nlarrow, l_nonlarrow
+		l_lock, l_unlock, l_flush, l_endl, l_locendl, l_endent, l_color, l_nocolor, l_nlarrow, l_nonlarrow, l_localtime
 	};
 	
 	explicit log_console(int output_stream_socket);
@@ -199,9 +199,9 @@ public:
 		logger.flush();
 	}
 	
-	static inline void lock();
+	inline void lock();
 	
-	static inline void unlock();
+	inline void unlock();
 	
 	static inline void setting_stdin();
 	
@@ -284,7 +284,7 @@ private:
 	static struct termios* stdin_defaults;
 	static struct termios* stdout_defaults;
 	static struct termios* stderr_defaults;
-	static pthread_mutex_t mutex;
+	pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 	FILE* output_stream;
 	bool     is_logging_on = true;
 	bool     time          = false;
@@ -293,8 +293,6 @@ private:
 	bool     colorful      = true;
 	bool     enablearrow   = true;
 };
-
-pthread_mutex_t log_console::mutex = PTHREAD_MUTEX_INITIALIZER;
 
 log_console::log_console(int output_stream_socket) : output_stream(::fdopen(output_stream_socket, "wb"))
 { }
@@ -358,10 +356,10 @@ enable_if_t<std::is_integral_v<int_t>, std::string&> log_console::integral_to_st
 }
 
 void log_console::lock()
-{ pthread_mutex_lock(&log_console::mutex); }
+{ pthread_mutex_lock(&this->mutex); }
 
 void log_console::unlock()
-{ pthread_mutex_unlock(&log_console::mutex); }
+{ pthread_mutex_unlock(&this->mutex); }
 
 struct termios* log_console::stdin_defaults  = nullptr;
 struct termios* log_console::stdout_defaults = nullptr;
@@ -683,10 +681,10 @@ inline log_console& operator<<(log_console& logger, log_console::l_flags flag)
 		switch (flag)
 		{
 			case log_console::l_flags::l_lock:
-				log_console::lock();
+				logger.lock();
 				break;
 			case log_console::l_flags::l_unlock:
-				log_console::unlock();
+				logger.unlock();
 				break;
 			case log_console::l_flags::l_flush:
 				logger.flush();
@@ -703,7 +701,7 @@ inline log_console& operator<<(log_console& logger, log_console::l_flags flag)
 			case log_console::l_flags::l_endent:
 				logger.print("\n");
 				logger.flush();
-				log_console::unlock();
+				logger.unlock();
 				break;
 			case log_console::l_flags::l_color:
 				logger.colorful = true;
@@ -717,6 +715,13 @@ inline log_console& operator<<(log_console& logger, log_console::l_flags flag)
 			case log_console::l_flags::l_nonlarrow:
 				logger.enablearrow = false;
 				break;
+			case log_console::l_flags::l_localtime:
+				struct tm* tinfo = ::localtime(new time_t(time(nullptr)));
+				char   time[128];
+				size_t size      = ::strftime(time, 127, "%a %d.%m.%Y %H:%M:%S\t", tinfo);
+				time[size] = 0;
+				logger.print(time);
+				break;
 		}
 	}
 	return logger;
@@ -729,10 +734,10 @@ inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair
 		switch (flag)
 		{
 			case log_console::l_flags::l_lock:
-				log_console::lock();
+				logger.first.lock();
 				break;
 			case log_console::l_flags::l_unlock:
-				log_console::unlock();
+				logger.first.unlock();
 				break;
 			case log_console::l_flags::l_flush:
 				logger.first.flush();
@@ -749,7 +754,7 @@ inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair
 			case log_console::l_flags::l_endent:
 				logger.first.print("\n");
 				logger.first.flush();
-				log_console::unlock();
+				logger.first.unlock();
 				break;
 			case log_console::l_flags::l_color:
 				logger.first.colorful = true;
@@ -762,6 +767,13 @@ inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair
 				break;
 			case log_console::l_flags::l_nonlarrow:
 				logger.first.enablearrow = false;
+			case log_console::l_flags::l_localtime:
+				struct tm* tinfo = ::localtime(new time_t(time(nullptr)));
+				char   time[128];
+				size_t size      = ::strftime(time, 127, "%a %d.%m.%Y %H:%M:%S\t", tinfo);
+				time[size] = 0;
+				logger.first.print(time);
+				break;
 		}
 	}
 	return logger;
