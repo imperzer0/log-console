@@ -44,12 +44,12 @@ struct check_for_unary_minus
 	template <typename U, typename = decltype(-std::declval<U>())>
 	static constexpr std::true_type perform(U&& u)
 	{
-		return std::true_type();
+		return { };
 	}
 	
 	static constexpr std::false_type perform(...)
 	{
-		return std::false_type();
+		return { };
 	}
 };
 
@@ -58,12 +58,12 @@ struct check_for_less
 	template <typename U, typename = decltype(std::declval<const U&>() < std::declval<const U&>())>
 	static constexpr std::true_type perform(U&& u)
 	{
-		return std::true_type();
+		return { };
 	}
 	
 	static constexpr std::false_type perform(...)
 	{
-		return std::false_type();
+		return { };
 	}
 };
 
@@ -154,7 +154,11 @@ public:
 	
 	inline void print(const std::string& str) const;
 	
+	inline void print(const std::wstring& str) const;
+	
 	inline void print(const char& char_) const;
+	
+	inline void print(const wchar_t& char_) const;
 	
 	inline void flush();
 	
@@ -162,7 +166,7 @@ public:
 	static inline constexpr num_t abs(num_t num);
 	
 	template <typename int_t>
-	[[nodiscard]] static enable_if_t<std::is_integral_v<int_t>, std::string&> integral_to_string(int_t value, int radix);
+	[[nodiscard]] static enable_if_t<std::is_integral_v<int_t>, std::string&> integral_to_string(int_t value, int base);
 	
 	static inline void set_base(log_console& logger, int base)
 	{
@@ -303,17 +307,23 @@ log_console::log_console(FILE* output_stream) : output_stream(output_stream)
 log_console::~log_console()
 { ::fclose(output_stream); }
 
-void log_console::print(const std::string& str) const
+inline void log_console::print(const std::string& str) const
 { ::fwrite(str.c_str(), sizeof(char), str.size(), output_stream); }
 
-void log_console::print(const char& char_) const
+inline void log_console::print(const std::wstring& str) const
+{ ::fwrite(str.c_str(), sizeof(wchar_t), str.size(), output_stream); }
+
+inline void log_console::print(const char& char_) const
 { ::fwrite(&char_, sizeof(char_), 1, output_stream); }
 
-void log_console::flush()
+inline void log_console::print(const wchar_t& char_) const
+{ ::fwrite(&char_, sizeof(char_), 1, output_stream); }
+
+inline void log_console::flush()
 { ::fflush(this->output_stream); }
 
 template <typename num_t>
-constexpr num_t log_console::abs(num_t num)
+inline constexpr num_t log_console::abs(num_t num)
 {
 	static_assert(check_for_less::perform(num), "can't find less operator for passed object type");
 	static_assert(check_for_unary_minus::perform(num), "can't find unary minus operator for passed object type");
@@ -328,25 +338,23 @@ constexpr num_t log_console::abs(num_t num)
 }
 
 template <typename int_t>
-enable_if_t<std::is_integral_v<int_t>, std::string&> log_console::integral_to_string(int_t value, int radix)
+enable_if_t<std::is_integral_v<int_t>, std::string&> log_console::integral_to_string(int_t value, int base)
 {
 	auto* result = new std::string;
-	if (radix > 0 && radix <= BASE)
+	if (base > 0 && base <= BASE)
 	{
 		bool negative = value < 0;
 		while (value != 0)
 		{
-			int remainder = log_console::abs(value % radix);
-			value /= radix;
+			int remainder = log_console::abs(value % base);
+			value /= base;
 			result->insert(result->begin(), log_console::base36[remainder]);
 		}
-		
 		
 		if (negative)
 		{
 			result->insert(result->begin(), '-');
 		}
-		
 	}
 	else
 	{
@@ -355,17 +363,17 @@ enable_if_t<std::is_integral_v<int_t>, std::string&> log_console::integral_to_st
 	return *result;
 }
 
-void log_console::lock()
+inline void log_console::lock()
 { pthread_mutex_lock(&this->mutex); }
 
-void log_console::unlock()
+inline void log_console::unlock()
 { pthread_mutex_unlock(&this->mutex); }
 
 struct termios* log_console::stdin_defaults  = nullptr;
 struct termios* log_console::stdout_defaults = nullptr;
 struct termios* log_console::stderr_defaults = nullptr;
 
-void log_console::setting_stdin()
+inline void log_console::setting_stdin()
 {
 	if (log_console::stdin_defaults == nullptr)
 	{ log_console::stdin_defaults = new termios; }
@@ -378,7 +386,7 @@ void log_console::setting_stdin()
 	::tcsetattr(0, TCSANOW, &settings);
 }
 
-void log_console::setting_stdout()
+inline void log_console::setting_stdout()
 {
 	if (log_console::stdout_defaults == nullptr)
 	{ log_console::stdout_defaults = new termios; }
@@ -391,7 +399,7 @@ void log_console::setting_stdout()
 	::tcsetattr(1, TCSANOW, &settings);
 }
 
-void log_console::setting_stderr()
+inline void log_console::setting_stderr()
 {
 	if (log_console::stderr_defaults == nullptr)
 	{ log_console::stderr_defaults = new termios; }
@@ -404,7 +412,7 @@ void log_console::setting_stderr()
 	::tcsetattr(2, TCSANOW, &settings);
 }
 
-void log_console::reset_all()
+inline void log_console::reset_all()
 {
 	if (log_console::stdin_defaults != nullptr)
 	{
@@ -520,7 +528,7 @@ operator<<(const std::pair<log_console&, std::true_type>& logger, const decltype
 	return logger;
 }
 
-inline const std::pair<log_console&, std::true_type>& operator<<(log_console& logger, const std::remove_cvref_t<decltype(l_time)>& time)
+[[deprecated]]inline const std::pair<log_console&, std::true_type>& operator<<(log_console& logger, const std::remove_cvref_t<decltype(l_time)>& time)
 {
 	if (logger.is_logging_on)
 	{
@@ -541,7 +549,7 @@ inline const std::pair<log_console&, std::true_type>& operator<<(log_console& lo
 	return *new std::remove_cvref_t<decltype(operator<<(logger, l_time))>{logger, std::true_type()};
 }
 
-inline log_console& operator<<(const std::pair<log_console&, std::true_type>& logger, const decltype(l_time)& time)
+[[deprecated]]inline log_console& operator<<(const std::pair<log_console&, std::true_type>& logger, const decltype(l_time)& time)
 {
 	if (logger.first.is_logging_on)
 	{
@@ -579,7 +587,7 @@ inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair
 		if (logger.first.enablearrow)
 		{
 			std::string copy;
-			for (auto& i : str)
+			for (auto& i: str)
 			{
 				copy += i;
 				if (i == '\n')
@@ -608,7 +616,7 @@ inline log_console& operator<<(log_console& logger, const char* str)
 	return logger;
 }
 
-const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, const char* str)
+inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, const char* str)
 {
 	if (logger.first.is_logging_on)
 	{
@@ -780,14 +788,14 @@ inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair
 }
 
 template <typename type>
-log_console& operator<<(log_console& logger, type num)
+inline log_console& operator<<(log_console& logger, type num)
 {
 	if (logger.is_logging_on)
 	{
 		logger.time     = false;
 		logger.location = false;
 		
-		if constexpr(std::is_same_v<type, char>)
+		if constexpr(std::is_same_v<type, char> || std::is_same_v<type, wchar_t>)
 		{
 			logger.print(num);
 		}
@@ -814,7 +822,7 @@ log_console& operator<<(log_console& logger, type num)
 }
 
 template <typename type>
-const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, type num)
+inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, type num)
 {
 	if (logger.first.is_logging_on)
 	{
