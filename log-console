@@ -513,13 +513,13 @@ operator<<(const std::pair<log_console&, std::true_type>& logger, const decltype
 							   log_console::color_l_location_separator + "::" + log_console::color_l_location + location.second.first + "()" +
 							   log_console::color_l_location_separator + "::" + log_console::color_l_location +
 							   std::to_string(location.second.second) +
-							   color::reset + "\n+-->  "
+							   color::reset + "\n+--> "
 			);
 		}
 		else
 		{
 			logger.first.print((logger.first.time ? std::string() : std::string("\n")) + location.first + "::" + location.second.first + "()" +
-							   "::" + std::to_string(location.second.second) + "\n+-->  "
+							   "::" + std::to_string(location.second.second) + "\n+--> "
 			);
 		}
 		logger.first.time = false;
