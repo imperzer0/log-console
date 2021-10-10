@@ -143,8 +143,15 @@ public:
 	
 	enum l_flags : unsigned long
 	{
-		l_lock, l_unlock, l_flush, l_endl, l_locendl, l_endent, l_color, l_nocolor, l_nlarrow, l_nonlarrow, l_localtime
+		l_lock, l_unlock, l_flush, l_endl, l_locendl, l_endent, l_color, l_nocolor, l_nlarrow, l_nonlarrow
 	};
+	
+	struct l_special_flag
+	{
+		unsigned long val;
+	};
+	
+	static constexpr const l_special_flag l_localtime = {0xff};
 	
 	inline explicit log_console(int output_stream_socket);
 	
@@ -276,6 +283,11 @@ private:
 	
 	friend inline const std::pair<log_console&, std::true_type>&
 	operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::l_flags flag);
+	
+	friend inline const std::pair<log_console&, std::true_type>& operator<<(log_console& logger, log_console::l_special_flag flag);
+	
+	friend inline const std::pair<log_console&, std::true_type>&
+	operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::l_special_flag flag);
 	
 	template <typename type>
 	friend inline log_console& operator<<(log_console& logger, type num);
@@ -723,14 +735,6 @@ inline log_console& operator<<(log_console& logger, log_console::l_flags flag)
 			case log_console::l_flags::l_nonlarrow:
 				logger.enablearrow = false;
 				break;
-			case log_console::l_flags::l_localtime:
-				time_t tm = time(nullptr);
-				struct tm* tinfo = ::localtime(&tm);
-				char time[128];
-				size_t size = ::strftime(time, 127, "%a %d.%m.%Y %H:%M:%S\t", tinfo);
-				time[size] = 0;
-				logger.print(time);
-				break;
 		}
 	}
 	return logger;
@@ -776,14 +780,46 @@ inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair
 				break;
 			case log_console::l_flags::l_nonlarrow:
 				logger.first.enablearrow = false;
-			case log_console::l_flags::l_localtime:
-				time_t tm = time(nullptr);
-				struct tm* tinfo = ::localtime(&tm);
-				char time[128];
-				size_t size = ::strftime(time, 127, "%a %d.%m.%Y %H:%M:%S\t", tinfo);
-				time[size] = 0;
-				logger.first.print(time);
 				break;
+		}
+	}
+	return logger;
+}
+
+inline const std::pair<log_console&, std::true_type>& operator<<(log_console& logger, log_console::l_special_flag flag)
+{
+	if (logger.is_logging_on)
+	{
+		if (flag.val == log_console::l_localtime.val)
+		{
+			time_t tm = time(nullptr);
+			struct tm* tinfo = ::localtime(&tm);
+			char time[128];
+			size_t size = ::strftime(time, 127, "\033[35m%a %d.%m.%Y %H:%M:%S\033[0m\t", tinfo);
+			time[size] = 0;
+			logger.print(time);
+			logger.time = true;
+			logger.location = false;
+		}
+	}
+	return *new std::remove_cvref_t<decltype(operator<<(logger, flag))>{logger, std::true_type()};
+}
+
+inline const std::pair<log_console&, std::true_type>&
+operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::l_special_flag flag)
+{
+	if (logger.first.is_logging_on)
+	{
+		if (flag.val == log_console::l_localtime.val)
+		{
+			time_t tm = time(nullptr);
+			struct tm* tinfo = ::localtime(&tm);
+			char time[128];
+			size_t size = ::strftime(time, 127, "\033[35m%a %d.%m.%Y %H:%M:%S\033[0m\t", tinfo);
+			time[size] = 0;
+			logger.first.print(time);
+			logger.first.time = true;
+			logger.first.location = false;
 		}
 	}
 	return logger;
