@@ -87,7 +87,8 @@ namespace color
 {
 	static constexpr const char* reset = "\033[0m";
 	static constexpr const char* bold = "\033[1m";
-	static constexpr const char* light = "\033[2m";
+	static constexpr const char* faint = "\033[2m";
+	[[deprecated]]static constexpr const char* light = faint;
 	static constexpr const char* italic = "\033[3m";
 	static constexpr const char* underlined = "\033[4m";
 	static constexpr const char* blinking = "\033[5m";
