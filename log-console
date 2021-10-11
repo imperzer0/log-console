@@ -180,6 +180,8 @@ public:
 	template <std::integral int_t>
 	inline static constexpr std::string& integral_to_string(int_t value, int base);
 	
+	inline static const char* get_time();
+	
 	static inline void set_base(log_console& logger, int base)
 	{
 		logger.base = base;
@@ -380,6 +382,21 @@ inline constexpr std::string& log_console::integral_to_string(int_t value, int b
 		*result = "<invalid_base>";
 	}
 	return *result;
+}
+
+inline const char* log_console::get_time()
+{
+	time_t tm = ::time(nullptr);
+	struct tm* tinfo = ::localtime(&tm);
+	auto* time = new char[128];
+	auto* res = new char[128];
+	size_t size = ::strftime(time, 127, "\033[35m%a %d.%m.%Y %H:%M:%S", tinfo);
+	time[size] = 0;
+	struct timespec ts{ };
+	timespec_get(&ts, TIME_UTC);
+	size = sprintf(res, "%s %ldms %s", time, ts.tv_nsec / 1000000, "\033[0m\t");
+	res[size] = 0;
+	return res;
 }
 
 inline void log_console::lock()
@@ -799,11 +816,7 @@ inline const std::pair<log_console&, std::true_type>& operator<<(log_console& lo
 	{
 		if (flag.val == log_console::l_localtime.val)
 		{
-			time_t tm = time(nullptr);
-			struct tm* tinfo = ::localtime(&tm);
-			char time[128];
-			size_t size = ::strftime(time, 127, "\033[35m%a %d.%m.%Y %H:%M:%S\033[0m\t", tinfo);
-			time[size] = 0;
+			auto time = log_console::get_time();
 			logger.print(time);
 			logger.time = true;
 			logger.location = false;
@@ -819,11 +832,7 @@ operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::l
 	{
 		if (flag.val == log_console::l_localtime.val)
 		{
-			time_t tm = time(nullptr);
-			struct tm* tinfo = ::localtime(&tm);
-			char time[128];
-			size_t size = ::strftime(time, 127, "\033[35m%a %d.%m.%Y %H:%M:%S\033[0m\t", tinfo);
-			time[size] = 0;
+			auto time = log_console::get_time();
 			logger.first.print(time);
 			logger.first.time = true;
 			logger.first.location = false;
