@@ -1,6 +1,7 @@
 #include <utility>
 #include <iostream>
 #include <termios.h>
+#include <concepts>
 //
 // Created by imper on 6/12/21.
 //
@@ -68,6 +69,9 @@ struct check_for_less
 };
 
 template <typename char_t>
+concept character = std::is_same_v<char_t, char> || std::is_same_v<char_t, wchar_t>;
+
+template <character char_t>
 static constexpr size_t static_strlen(const char_t* str)
 {
 	size_t size(0);
@@ -171,10 +175,10 @@ public:
 	inline void flush();
 	
 	template <typename num_t>
-	static inline constexpr num_t abs(num_t num);
+	inline static constexpr num_t abs(num_t num);
 	
-	template <typename int_t>
-	[[nodiscard]] static enable_if_t<std::is_integral_v<int_t>, std::string&> integral_to_string(int_t value, int base);
+	template <std::integral int_t>
+	inline static constexpr std::string& integral_to_string(int_t value, int base);
 	
 	static inline void set_base(log_console& logger, int base)
 	{
@@ -297,7 +301,7 @@ private:
 	friend inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, type num);
 	
 	static constexpr const char* base36 = "0123456789abcdefghijklmnopqrstuvwxyz";
-	static constexpr size_t BASE = static_strlen(base36);
+	static constexpr const size_t max_base = static_strlen(base36);
 	static struct termios* stdin_defaults;
 	static struct termios* stdout_defaults;
 	static struct termios* stderr_defaults;
@@ -350,11 +354,11 @@ inline constexpr num_t log_console::abs(num_t num)
 	}
 }
 
-template <typename int_t>
-inline enable_if_t<std::is_integral_v<int_t>, std::string&> log_console::integral_to_string(int_t value, int base)
+template <std::integral int_t>
+inline constexpr std::string& log_console::integral_to_string(int_t value, int base)
 {
 	auto* result = new std::string;
-	if (base > 0 && base <= BASE)
+	if (base > 0 && base <= max_base)
 	{
 		bool negative = value < 0;
 		while (value != 0)
@@ -368,6 +372,8 @@ inline enable_if_t<std::is_integral_v<int_t>, std::string&> log_console::integra
 		{
 			result->insert(result->begin(), '-');
 		}
+		
+		if (result->empty()) *result = "0";
 	}
 	else
 	{
