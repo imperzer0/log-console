@@ -1,6 +1,6 @@
 pkgname="log-console"
 epoch=1
-pkgver=14
+pkgver=15
 pkgrel=1
 pkgdesc="console logger static library"
 arch=("x86_64")

@@ -71,6 +71,9 @@ struct check_for_less
 template <typename char_t>
 concept character = std::is_same_v<char_t, char> || std::is_same_v<char_t, wchar_t>;
 
+template <typename arithmetic_t>
+concept arithmetic = std::is_arithmetic_v<arithmetic_t>;
+
 template <character char_t>
 static constexpr size_t static_strlen(const char_t* str)
 {
@@ -180,7 +183,7 @@ public:
 	template <std::integral int_t>
 	inline static constexpr std::string& integral_to_string(int_t value, int base);
 	
-	inline static const char* get_time();
+	inline static const char* get_time(bool color = true);
 	
 	static inline void set_base(log_console& logger, int base)
 	{
@@ -296,11 +299,11 @@ private:
 	friend inline const std::pair<log_console&, std::true_type>&
 	operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::l_special_flag flag);
 	
-	template <typename type>
-	friend inline log_console& operator<<(log_console& logger, type num);
+	template <arithmetic num_t>
+	friend inline log_console& operator<<(log_console& logger, num_t num);
 	
-	template <typename type>
-	friend inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, type num);
+	template <arithmetic num_t>
+	friend inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, num_t num);
 	
 	static constexpr const char* base36 = "0123456789abcdefghijklmnopqrstuvwxyz";
 	static constexpr const size_t max_base = static_strlen(base36);
@@ -384,13 +387,13 @@ inline constexpr std::string& log_console::integral_to_string(int_t value, int b
 	return *result;
 }
 
-inline const char* log_console::get_time()
+inline const char* log_console::get_time(bool color)
 {
 	time_t tm = ::time(nullptr);
 	struct tm* tinfo = ::localtime(&tm);
 	auto* time = new char[128];
 	auto* res = new char[128];
-	size_t size = ::strftime(time, 127, "\033[35m%a %d.%m.%Y %H:%M:%S", tinfo);
+	size_t size = ::strftime(time, 127, (std::string((color ? "\033[35m" : "")) + "%a %d.%m.%Y %H:%M:%S").c_str(), tinfo);
 	time[size] = 0;
 	struct timespec ts{ };
 	timespec_get(&ts, TIME_UTC);
@@ -724,40 +727,30 @@ inline log_console& operator<<(log_console& logger, log_console::l_flags flag)
 	{
 		switch (flag)
 		{
-			case log_console::l_flags::l_lock:
-				logger.lock();
+			case log_console::l_flags::l_lock: logger.lock();
 				break;
-			case log_console::l_flags::l_unlock:
-				logger.unlock();
+			case log_console::l_flags::l_unlock: logger.unlock();
 				break;
-			case log_console::l_flags::l_flush:
+			case log_console::l_flags::l_flush: logger.flush();
+				break;
+			case log_console::l_flags::l_endl: logger.print("\n");
 				logger.flush();
 				break;
-			case log_console::l_flags::l_endl:
-				logger.print("\n");
-				logger.flush();
-				break;
-			case log_console::l_flags::l_locendl:
-				logger.print("\n");
+			case log_console::l_flags::l_locendl: logger.print("\n");
 				logger.print(log_console::log_arrow);
 				logger.flush();
 				break;
-			case log_console::l_flags::l_endent:
-				logger.print("\n");
+			case log_console::l_flags::l_endent: logger.print("\n");
 				logger.flush();
 				logger.unlock();
 				break;
-			case log_console::l_flags::l_color:
-				logger.colorful = true;
+			case log_console::l_flags::l_color: logger.colorful = true;
 				break;
-			case log_console::l_flags::l_nocolor:
-				logger.colorful = false;
+			case log_console::l_flags::l_nocolor: logger.colorful = false;
 				break;
-			case log_console::l_flags::l_nlarrow:
-				logger.enablearrow = true;
+			case log_console::l_flags::l_nlarrow: logger.enablearrow = true;
 				break;
-			case log_console::l_flags::l_nonlarrow:
-				logger.enablearrow = false;
+			case log_console::l_flags::l_nonlarrow: logger.enablearrow = false;
 				break;
 		}
 	}
@@ -770,40 +763,30 @@ inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair
 	{
 		switch (flag)
 		{
-			case log_console::l_flags::l_lock:
-				logger.first.lock();
+			case log_console::l_flags::l_lock: logger.first.lock();
 				break;
-			case log_console::l_flags::l_unlock:
-				logger.first.unlock();
+			case log_console::l_flags::l_unlock: logger.first.unlock();
 				break;
-			case log_console::l_flags::l_flush:
+			case log_console::l_flags::l_flush: logger.first.flush();
+				break;
+			case log_console::l_flags::l_endl: logger.first.print("\n");
 				logger.first.flush();
 				break;
-			case log_console::l_flags::l_endl:
-				logger.first.print("\n");
-				logger.first.flush();
-				break;
-			case log_console::l_flags::l_locendl:
-				logger.first.print("\n");
+			case log_console::l_flags::l_locendl: logger.first.print("\n");
 				logger.first.print(log_console::log_arrow);
 				logger.first.flush();
 				break;
-			case log_console::l_flags::l_endent:
-				logger.first.print("\n");
+			case log_console::l_flags::l_endent: logger.first.print("\n");
 				logger.first.flush();
 				logger.first.unlock();
 				break;
-			case log_console::l_flags::l_color:
-				logger.first.colorful = true;
+			case log_console::l_flags::l_color: logger.first.colorful = true;
 				break;
-			case log_console::l_flags::l_nocolor:
-				logger.first.colorful = false;
+			case log_console::l_flags::l_nocolor: logger.first.colorful = false;
 				break;
-			case log_console::l_flags::l_nlarrow:
-				logger.first.enablearrow = true;
+			case log_console::l_flags::l_nlarrow: logger.first.enablearrow = true;
 				break;
-			case log_console::l_flags::l_nonlarrow:
-				logger.first.enablearrow = false;
+			case log_console::l_flags::l_nonlarrow: logger.first.enablearrow = false;
 				break;
 		}
 	}
@@ -816,7 +799,7 @@ inline const std::pair<log_console&, std::true_type>& operator<<(log_console& lo
 	{
 		if (flag.val == log_console::l_localtime.val)
 		{
-			auto time = log_console::get_time();
+			auto time = log_console::get_time(logger.colorful);
 			logger.print(time);
 			logger.time = true;
 			logger.location = false;
@@ -832,7 +815,7 @@ operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::l
 	{
 		if (flag.val == log_console::l_localtime.val)
 		{
-			auto time = log_console::get_time();
+			auto time = log_console::get_time(logger.first.colorful);
 			logger.first.print(time);
 			logger.first.time = true;
 			logger.first.location = false;
@@ -841,31 +824,31 @@ operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::l
 	return logger;
 }
 
-template <typename type>
-inline log_console& operator<<(log_console& logger, type num)
+template <arithmetic num_t>
+inline log_console& operator<<(log_console& logger, num_t num)
 {
 	if (logger.is_logging_on)
 	{
 		logger.time = false;
 		logger.location = false;
 		
-		if constexpr(std::is_same_v<type, char> || std::is_same_v<type, wchar_t>)
+		if constexpr(std::is_same_v<num_t, char> || std::is_same_v<num_t, wchar_t>)
 		{
 			logger.print(num);
 		}
-		else if constexpr(std::is_integral_v<type>)
+		else if constexpr(std::is_integral_v<num_t>)
 		{
 			if (logger.colorful)
 				logger.print(log_console::color_int_t + log_console::integral_to_string(num, logger.base) + color::reset);
 			else
 				logger.print(log_console::integral_to_string(num, logger.base));
 		}
-		else if constexpr(std::is_floating_point_v<type>)
+		else if constexpr(std::is_floating_point_v<num_t>)
 		{
 			if (logger.colorful)
-				logger.print(log_console::color_float_t + log_console::integral_to_string(num, logger.base) + color::reset);
+				logger.print(log_console::color_float_t + std::to_string(num) + color::reset);
 			else
-				logger.print(log_console::integral_to_string(num, logger.base));
+				logger.print(std::to_string(num));
 		}
 		else
 		{
@@ -875,31 +858,31 @@ inline log_console& operator<<(log_console& logger, type num)
 	return logger;
 }
 
-template <typename type>
-inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, type num)
+template <arithmetic num_t>
+inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, num_t num)
 {
 	if (logger.first.is_logging_on)
 	{
 		logger.first.time = false;
 		logger.first.location = false;
 		
-		if constexpr(std::is_same_v<type, char>)
+		if constexpr(std::is_same_v<num_t, char>)
 		{
 			logger.first.print(num);
 		}
-		else if constexpr(std::is_integral_v<type>)
+		else if constexpr(std::is_integral_v<num_t>)
 		{
 			if (logger.first.colorful)
 				logger.first.print(log_console::color_int_t + log_console::integral_to_string(num, logger.first.base) + color::reset);
 			else
 				logger.first.print(log_console::integral_to_string(num, logger.first.base));
 		}
-		else if constexpr(std::is_floating_point_v<type>)
+		else if constexpr(std::is_floating_point_v<num_t>)
 		{
 			if (logger.first.colorful)
-				logger.first.print(log_console::color_float_t + log_console::integral_to_string(num, logger.first.base) + color::reset);
+				logger.first.print(log_console::color_float_t + std::to_string(num) + color::reset);
 			else
-				logger.first.print(log_console::integral_to_string(num, logger.first.base));
+				logger.first.print(std::to_string(num));
 		}
 	}
 	return logger;
