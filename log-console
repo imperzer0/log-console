@@ -727,30 +727,40 @@ inline log_console& operator<<(log_console& logger, log_console::l_flags flag)
 	{
 		switch (flag)
 		{
-			case log_console::l_flags::l_lock: logger.lock();
+			case log_console::l_flags::l_lock:
+				logger.lock();
 				break;
-			case log_console::l_flags::l_unlock: logger.unlock();
+			case log_console::l_flags::l_unlock:
+				logger.unlock();
 				break;
-			case log_console::l_flags::l_flush: logger.flush();
-				break;
-			case log_console::l_flags::l_endl: logger.print("\n");
+			case log_console::l_flags::l_flush:
 				logger.flush();
 				break;
-			case log_console::l_flags::l_locendl: logger.print("\n");
+			case log_console::l_flags::l_endl:
+				logger.print("\n");
+				logger.flush();
+				break;
+			case log_console::l_flags::l_locendl:
+				logger.print("\n");
 				logger.print(log_console::log_arrow);
 				logger.flush();
 				break;
-			case log_console::l_flags::l_endent: logger.print("\n");
+			case log_console::l_flags::l_endent:
+				logger.print("\n");
 				logger.flush();
 				logger.unlock();
 				break;
-			case log_console::l_flags::l_color: logger.colorful = true;
+			case log_console::l_flags::l_color:
+				logger.colorful = true;
 				break;
-			case log_console::l_flags::l_nocolor: logger.colorful = false;
+			case log_console::l_flags::l_nocolor:
+				logger.colorful = false;
 				break;
-			case log_console::l_flags::l_nlarrow: logger.enablearrow = true;
+			case log_console::l_flags::l_nlarrow:
+				logger.enablearrow = true;
 				break;
-			case log_console::l_flags::l_nonlarrow: logger.enablearrow = false;
+			case log_console::l_flags::l_nonlarrow:
+				logger.enablearrow = false;
 				break;
 		}
 	}
@@ -763,30 +773,40 @@ inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair
 	{
 		switch (flag)
 		{
-			case log_console::l_flags::l_lock: logger.first.lock();
+			case log_console::l_flags::l_lock:
+				logger.first.lock();
 				break;
-			case log_console::l_flags::l_unlock: logger.first.unlock();
+			case log_console::l_flags::l_unlock:
+				logger.first.unlock();
 				break;
-			case log_console::l_flags::l_flush: logger.first.flush();
-				break;
-			case log_console::l_flags::l_endl: logger.first.print("\n");
+			case log_console::l_flags::l_flush:
 				logger.first.flush();
 				break;
-			case log_console::l_flags::l_locendl: logger.first.print("\n");
+			case log_console::l_flags::l_endl:
+				logger.first.print("\n");
+				logger.first.flush();
+				break;
+			case log_console::l_flags::l_locendl:
+				logger.first.print("\n");
 				logger.first.print(log_console::log_arrow);
 				logger.first.flush();
 				break;
-			case log_console::l_flags::l_endent: logger.first.print("\n");
+			case log_console::l_flags::l_endent:
+				logger.first.print("\n");
 				logger.first.flush();
 				logger.first.unlock();
 				break;
-			case log_console::l_flags::l_color: logger.first.colorful = true;
+			case log_console::l_flags::l_color:
+				logger.first.colorful = true;
 				break;
-			case log_console::l_flags::l_nocolor: logger.first.colorful = false;
+			case log_console::l_flags::l_nocolor:
+				logger.first.colorful = false;
 				break;
-			case log_console::l_flags::l_nlarrow: logger.first.enablearrow = true;
+			case log_console::l_flags::l_nlarrow:
+				logger.first.enablearrow = true;
 				break;
-			case log_console::l_flags::l_nonlarrow: logger.first.enablearrow = false;
+			case log_console::l_flags::l_nonlarrow:
+				logger.first.enablearrow = false;
 				break;
 		}
 	}
