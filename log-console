@@ -285,6 +285,10 @@ private:
 	
 	friend inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, const char* str);
 	
+	friend inline log_console& operator<<(log_console& logger, const void* ptr);
+	
+	friend inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, const void* ptr);
+	
 	friend inline log_console& operator<<(log_console& logger, bool boolean);
 	
 	friend inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, bool boolean);
@@ -674,6 +678,40 @@ inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair
 		{
 			logger.first.print(str);
 		}
+		logger.first.time = false;
+		logger.first.location = false;
+	}
+	return logger;
+}
+
+inline log_console& operator<<(log_console& logger, const void* ptr)
+{
+	if (logger.is_logging_on)
+	{
+		logger.print(color::reset);
+		logger.print(color::yellow_bg);
+		logger.print(color::bold);
+		logger.print(color::black);
+		logger.print("0x");
+		logger.print(log_console::integral_to_string(reinterpret_cast<unsigned long>(ptr), 0x10));
+		logger.print(color::reset);
+		logger.time = false;
+		logger.location = false;
+	}
+	return logger;
+}
+
+inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, const void* ptr)
+{
+	if (logger.first.is_logging_on)
+	{
+		logger.first.print(color::reset);
+		logger.first.print(color::yellow_bg);
+		logger.first.print(color::bold);
+		logger.first.print(color::black);
+		logger.first.print("0x");
+		logger.first.print(log_console::integral_to_string(reinterpret_cast<unsigned long>(ptr), 0x10));
+		logger.first.print(color::reset);
 		logger.first.time = false;
 		logger.first.location = false;
 	}
