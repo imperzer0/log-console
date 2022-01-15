@@ -2,6 +2,7 @@
 #include <iostream>
 #include <termios.h>
 #include <concepts>
+#include <mutex>
 //
 // Created by imper on 6/12/21.
 //
@@ -139,6 +140,13 @@ namespace position
 {
 	static constexpr const char* save = "\033[s";
 	static constexpr const char* restore = "\033[u";
+}
+
+namespace _detail_::log_console
+{
+	extern struct termios* stdin_defaults;
+	extern struct termios* stdout_defaults;
+	extern struct termios* stderr_defaults;
 }
 
 class log_console
@@ -309,12 +317,9 @@ private:
 	template <arithmetic num_t>
 	friend inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, num_t num);
 	
-	static constexpr const char* base36 = "0123456789abcdefghijklmnopqrstuvwxyz";
-	static constexpr const size_t max_base = static_strlen(base36);
-	static struct termios* stdin_defaults;
-	static struct termios* stdout_defaults;
-	static struct termios* stderr_defaults;
-	pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+	static constexpr const char* base_max_str = "0123456789abcdefghijklmnopqrstuvwxyz";
+	static constexpr const size_t base_max = static_strlen(base_max_str);
+	std::recursive_mutex mutex;
 	FILE* output_stream;
 	bool is_logging_on = true;
 	bool time = false;
@@ -367,14 +372,14 @@ template <std::integral int_t>
 inline constexpr std::string& log_console::integral_to_string(int_t value, int base)
 {
 	auto* result = new std::string;
-	if (base > 0 && base <= max_base)
+	if (base > 0 && base <= base_max)
 	{
 		bool negative = value < 0;
 		while (value != 0)
 		{
 			int remainder = log_console::abs(value % base);
 			value /= base;
-			result->insert(result->begin(), log_console::base36[remainder]);
+			result->insert(result->begin(), log_console::base_max_str[remainder]);
 		}
 		
 		if (negative)
@@ -407,21 +412,17 @@ inline const char* log_console::get_time(bool color)
 }
 
 inline void log_console::lock()
-{ pthread_mutex_lock(&this->mutex); }
+{ this->mutex.lock(); }
 
 inline void log_console::unlock()
-{ pthread_mutex_unlock(&this->mutex); }
-
-struct termios* log_console::stdin_defaults = nullptr;
-struct termios* log_console::stdout_defaults = nullptr;
-struct termios* log_console::stderr_defaults = nullptr;
+{ this->mutex.unlock(); }
 
 inline void log_console::setting_stdin()
 {
-	if (log_console::stdin_defaults == nullptr)
-	{ log_console::stdin_defaults = new termios; }
-	::tcgetattr(0, log_console::stdin_defaults);
-	struct termios settings = *log_console::stdin_defaults;
+	if (_detail_::log_console::stdin_defaults == nullptr)
+	{ _detail_::log_console::stdin_defaults = new termios; }
+	::tcgetattr(0, _detail_::log_console::stdin_defaults);
+	struct termios settings = *_detail_::log_console::stdin_defaults;
 	settings.c_lflag &= (~ICANON);
 	settings.c_lflag &= (~ECHO);
 	settings.c_cc[VTIME] = 0;
@@ -431,10 +432,10 @@ inline void log_console::setting_stdin()
 
 inline void log_console::setting_stdout()
 {
-	if (log_console::stdout_defaults == nullptr)
-	{ log_console::stdout_defaults = new termios; }
-	::tcgetattr(1, log_console::stdout_defaults);
-	struct termios settings = *log_console::stdout_defaults;
+	if (_detail_::log_console::stdout_defaults == nullptr)
+	{ _detail_::log_console::stdout_defaults = new termios; }
+	::tcgetattr(1, _detail_::log_console::stdout_defaults);
+	struct termios settings = *_detail_::log_console::stdout_defaults;
 	settings.c_lflag &= (~ICANON);
 	settings.c_lflag &= (~ECHO);
 	settings.c_cc[VTIME] = 0;
@@ -444,10 +445,10 @@ inline void log_console::setting_stdout()
 
 inline void log_console::setting_stderr()
 {
-	if (log_console::stderr_defaults == nullptr)
-	{ log_console::stderr_defaults = new termios; }
-	::tcgetattr(2, log_console::stderr_defaults);
-	struct termios settings = *log_console::stderr_defaults;
+	if (_detail_::log_console::stderr_defaults == nullptr)
+	{ _detail_::log_console::stderr_defaults = new termios; }
+	::tcgetattr(2, _detail_::log_console::stderr_defaults);
+	struct termios settings = *_detail_::log_console::stderr_defaults;
 	settings.c_lflag &= (~ICANON);
 	settings.c_lflag &= (~ECHO);
 	settings.c_cc[VTIME] = 0;
@@ -457,20 +458,20 @@ inline void log_console::setting_stderr()
 
 inline void log_console::reset_all()
 {
-	if (log_console::stdin_defaults != nullptr)
+	if (_detail_::log_console::stdin_defaults != nullptr)
 	{
-		::tcsetattr(0, TCSANOW, log_console::stdin_defaults);
-		log_console::stdin_defaults = nullptr;
+		::tcsetattr(0, TCSANOW, _detail_::log_console::stdin_defaults);
+		_detail_::log_console::stdin_defaults = nullptr;
 	}
-	if (log_console::stdout_defaults != nullptr)
+	if (_detail_::log_console::stdout_defaults != nullptr)
 	{
-		::tcsetattr(1, TCSANOW, log_console::stdout_defaults);
-		log_console::stdout_defaults = nullptr;
+		::tcsetattr(1, TCSANOW, _detail_::log_console::stdout_defaults);
+		_detail_::log_console::stdout_defaults = nullptr;
 	}
-	if (log_console::stderr_defaults != nullptr)
+	if (_detail_::log_console::stderr_defaults != nullptr)
 	{
-		::tcsetattr(1, TCSANOW, log_console::stderr_defaults);
-		log_console::stderr_defaults = nullptr;
+		::tcsetattr(1, TCSANOW, _detail_::log_console::stderr_defaults);
+		_detail_::log_console::stderr_defaults = nullptr;
 	}
 }
 

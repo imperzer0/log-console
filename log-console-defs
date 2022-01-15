@@ -1,0 +1,16 @@
+//
+// Created by imper on 1/15/22.
+//
+
+#ifndef LOG_CONSOLE_LOG_CONSOLE_DEFS_
+#define LOG_CONSOLE_LOG_CONSOLE_DEFS_
+
+#include <log-console>
+
+namespace _detail_::log_console
+{
+	struct termios* stdin_defaults = nullptr;
+	struct termios* stdout_defaults = nullptr;
+	struct termios* stderr_defaults = nullptr;
+}
+#endif //LOG_CONSOLE_LOG_CONSOLE_DEFS_
