@@ -9,7 +9,7 @@ license=('GPL')
 # depends=()
 makedepends=("cmake>=3.0")
 
-libfiles = ("log-console" "log-console-defs")
+libfiles=("log-console" "log-console-defs")
 
 # add all library files to sources
 for libfile in ${libfiles[@]}
@@ -18,7 +18,7 @@ for libfile in ${libfiles[@]}
 }
 
 # skip all checksums
-for libfile in libfiles
+for libfile in ${libfiles[@]}
 {
     md5sums=(${md5sums} "SKIP")
 }
