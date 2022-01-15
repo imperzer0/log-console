@@ -27,7 +27,7 @@ for libfile in ${libfiles[@]}
 
 package()
 {
-    for libfile in libfiles
+    for libfile in ${libfiles[@]}
 	{
 	    install -Dm755 "./$libfile" "$pkgdir/usr/include/$libfile"
 	}
