@@ -240,8 +240,8 @@ public:
 	
 	static inline void reset_all();
 	
-	static constexpr const char* color_int_t = color::purple;
-	static constexpr const char* color_float_t = color::blue;
+	static constexpr const char* color_int_t = color::blue;
+	static constexpr const char* color_float_t = color::aqua;
 	static constexpr const char* color_l_location = "\033[35m\033[2m";
 	static constexpr const char* color_l_location_separator = "\033[33m\033[2m";
 	static constexpr const char* color_l_time = "\033[35m\033[2m";
