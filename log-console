@@ -3,43 +3,12 @@
 #include <termios.h>
 #include <concepts>
 #include <mutex>
+#include <memory>
 //
 // Created by imper on 6/12/21.
 //
-#ifndef KAZKUEME_LOG_CONSOLE_HPP
-#define KAZKUEME_LOG_CONSOLE_HPP
-
-template <typename T, T val>
-struct val_is
-{
-	static constexpr T value = val;
-};
-
-template <typename T>
-struct type_is
-{
-	using type = T;
-};
-
-template <bool, auto T_val, auto>
-struct choose_val : val_is<decltype(T_val), T_val>
-{
-};
-
-template <auto T_val, auto F_val>
-struct choose_val<false, T_val, F_val> : val_is<decltype(F_val), F_val>
-{
-};
-
-template <bool, typename T>
-struct enable_if : type_is<T>
-{
-};
-
-template <typename T>
-struct enable_if<false, T>
-{
-};
+#ifndef LOG_CONSOLE
+#define LOG_CONSOLE
 
 struct check_for_unary_minus
 {
@@ -75,28 +44,28 @@ concept character = std::is_same_v<char_t, char> || std::is_same_v<char_t, wchar
 template <typename arithmetic_t>
 concept arithmetic = std::is_arithmetic_v<arithmetic_t>;
 
+template <template <typename> typename string_t, typename T>
+concept string_type = std::is_same_v<string_t<T>, std::basic_string<T>>;
+
+template <typename Smart>
+using remove_smart = typename Smart::element_type;
+
 template <character char_t>
 static constexpr size_t static_strlen(const char_t* str)
 {
 	size_t size(0);
-	for (; *str; ++str)
-	{
-		++size;
-	}
+	for (; *str; ++str) ++size;
 	return size;
 }
 
-template <bool expr, typename T> using enable_if_t = typename enable_if<expr, T>::type;
-
 #define l_location std::pair<const char*, std::pair<const char*, int>>(__FILE__, {__func__, __LINE__})
-#define l_time std::pair<const char*, const char*>(__DATE__, __TIME__)
 
 namespace color
 {
 	static constexpr const char* reset = "\033[0m";
 	static constexpr const char* bold = "\033[1m";
 	static constexpr const char* faint = "\033[2m";
-	[[deprecated]]static constexpr const char* light = faint;
+	[[deprecated]] static constexpr const char* light = faint;
 	static constexpr const char* italic = "\033[3m";
 	static constexpr const char* underlined = "\033[4m";
 	static constexpr const char* blinking = "\033[5m";
@@ -169,21 +138,47 @@ public:
 	
 	static constexpr const l_special_flag l_localtime = {0xff};
 	
-	inline explicit log_console(int output_stream_socket);
 	
-	inline explicit log_console(FILE* output_stream);
+	inline log_console(int output_stream_socket) : output_stream(::fdopen(output_stream_socket, "wb"))
+	{ }
 	
-	inline ~log_console();
+	inline log_console(FILE* output_stream) : output_stream(output_stream)
+	{ }
 	
-	inline void print(const std::string& str) const;
+	inline ~log_console()
+	{
+		::fclose(output_stream);
+	}
 	
-	inline void print(const std::wstring& str) const;
+	template <template <typename> typename S, typename T>
+	requires string_type<S, T>
+	inline void print(const S<T>& str) const
+	{
+		::fwrite(str.c_str(), sizeof(T), str.size(), output_stream);
+	}
 	
-	inline void print(const char& char_) const;
+	template <character char_t>
+	inline void print(const char_t* str) const
+	{
+		::fwrite(str, sizeof(char_t), static_strlen(str), output_stream);
+	}
 	
-	inline void print(const wchar_t& char_) const;
+	template <template <typename> typename Container, typename T>
+	inline void print(const Container<T>& container) const
+	{
+		::fwrite(container.data(), sizeof(T), container.size(), output_stream);
+	}
 	
-	inline void flush();
+	template <character char_t>
+	inline void print(char_t _char) const
+	{
+		::fwrite(&_char, sizeof(_char), 1, output_stream);
+	}
+	
+	inline void flush()
+	{
+		::fflush(output_stream);
+	}
 	
 	template <typename num_t>
 	inline static constexpr num_t abs(num_t num);
@@ -228,9 +223,15 @@ public:
 		logger.flush();
 	}
 	
-	inline void lock();
+	inline void lock()
+	{
+		mutex.lock();
+	}
 	
-	inline void unlock();
+	inline void unlock()
+	{
+		mutex.unlock();
+	}
 	
 	static inline void setting_stdin();
 	
@@ -259,63 +260,69 @@ public:
 private:
 	friend inline log_console& operator<<(log_console& logger, log_console::state_change_function state_change_function);
 	
-	friend inline const std::pair<log_console&, std::true_type>&
-	operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::state_change_function state_change_function);
+	friend inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+			std::shared_ptr<std::pair<log_console&, std::true_type>> logger, log_console::state_change_function state_change_function);
 	
 	template <typename T>
-	friend inline const std::pair<log_console&, log_console::val_set_function<T>>&
-	operator<<(log_console& logger, log_console::val_set_function<T> val_set_function);
+	friend inline const std::pair<log_console&, log_console::val_set_function<T>>& operator<<(
+			log_console& logger, log_console::val_set_function<T> val_set_function);
 	
 	template <typename T>
-	friend inline const std::pair<log_console&, log_console::val_set_function<T>>&
-	operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::val_set_function<T> val_set_function);
+	friend inline const std::pair<log_console&, log_console::val_set_function<T>>& operator<<(
+			std::shared_ptr<std::pair<log_console&, std::true_type>> logger, log_console::val_set_function<T> val_set_function);
 	
 	template <typename T>
-	friend inline const std::pair<log_console&, std::true_type>&
-	operator<<(const std::pair<log_console&, log_console::val_set_function<T>>& logger, T val);
+	friend inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+			std::shared_ptr<std::pair<log_console&, log_console::val_set_function<T>>> logger, T val);
 	
-	friend inline const std::pair<log_console&, std::true_type>&
-	operator<<(log_console& logger, const std::remove_cvref_t<decltype(l_location)>& location);
+	friend inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+			log_console& logger, const std::remove_cvref_t<decltype(l_location)>& location);
 	
-	friend inline const std::pair<log_console&, std::true_type>&
-	operator<<(const std::pair<log_console&, std::true_type>& logger, const decltype(l_location)& location);
-	
-	friend inline const std::pair<log_console&, std::true_type>& operator<<(log_console& logger, const std::remove_cvref_t<decltype(l_time)>& time);
-	
-	friend inline log_console& operator<<(const std::pair<log_console&, std::true_type>& logger, const decltype(l_time)& time);
+	friend inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+			std::shared_ptr<std::pair<log_console&, std::true_type>> logger, const decltype(l_location)& location);
 	
 	friend inline log_console& operator<<(log_console& logger, const std::string& str);
 	
-	friend inline const std::pair<log_console&, std::true_type>&
-	operator<<(const std::pair<log_console&, std::true_type>& logger, const std::string& str);
+	friend inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+			std::shared_ptr<std::pair<log_console&, std::true_type>> logger, const std::string& str);
+	
+	friend inline log_console& operator<<(log_console& logger, const std::wstring& str);
+	
+	friend inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+			std::shared_ptr<std::pair<log_console&, std::true_type>> logger, const std::wstring& str);
 	
 	friend inline log_console& operator<<(log_console& logger, const char* str);
 	
-	friend inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, const char* str);
+	friend inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+			std::shared_ptr<std::pair<log_console&, std::true_type>> logger, const char* str);
 	
 	friend inline log_console& operator<<(log_console& logger, const void* ptr);
 	
-	friend inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, const void* ptr);
+	friend inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+			std::shared_ptr<std::pair<log_console&, std::true_type>> logger, const void* ptr);
 	
 	friend inline log_console& operator<<(log_console& logger, bool boolean);
 	
-	friend inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, bool boolean);
+	friend inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+			std::shared_ptr<std::pair<log_console&, std::true_type>> logger, bool boolean);
 	
 	friend inline log_console& operator<<(log_console& logger, log_console::l_flags flag);
 	
-	friend inline const std::pair<log_console&, std::true_type>&
-	operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::l_flags flag);
+	friend inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+			std::shared_ptr<std::pair<log_console&, std::true_type>> logger, log_console::l_flags flag);
 	
-	friend inline const std::pair<log_console&, std::true_type>& operator<<(log_console& logger, log_console::l_special_flag flag);
+	friend inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+			log_console& logger, log_console::l_special_flag flag);
 	
-	friend inline const std::pair<log_console&, std::true_type>&
-	operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::l_special_flag flag);
+	friend inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+			std::shared_ptr<std::pair<log_console&, std::true_type>> logger, log_console::l_special_flag flag);
 	
 	template <arithmetic num_t>
 	friend inline log_console& operator<<(log_console& logger, num_t num);
 	
 	template <arithmetic num_t>
-	friend inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, num_t num);
+	friend inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+			std::shared_ptr<std::pair<log_console&, std::true_type>> logger, num_t num);
 	
 	static constexpr const char* base_max_str = "0123456789abcdefghijklmnopqrstuvwxyz";
 	static constexpr const size_t base_max = static_strlen(base_max_str);
@@ -328,30 +335,6 @@ private:
 	bool colorful = true;
 	bool enablearrow = true;
 };
-
-inline log_console::log_console(int output_stream_socket) : output_stream(::fdopen(output_stream_socket, "wb"))
-{ }
-
-inline log_console::log_console(FILE* output_stream) : output_stream(output_stream)
-{ }
-
-inline log_console::~log_console()
-{ ::fclose(output_stream); }
-
-inline void log_console::print(const std::string& str) const
-{ ::fwrite(str.c_str(), sizeof(char), str.size(), output_stream); }
-
-inline void log_console::print(const std::wstring& str) const
-{ ::fwrite(str.c_str(), sizeof(wchar_t), str.size(), output_stream); }
-
-inline void log_console::print(const char& char_) const
-{ ::fwrite(&char_, sizeof(char_), 1, output_stream); }
-
-inline void log_console::print(const wchar_t& char_) const
-{ ::fwrite(&char_, sizeof(char_), 1, output_stream); }
-
-inline void log_console::flush()
-{ ::fflush(this->output_stream); }
 
 template <typename num_t>
 inline constexpr num_t log_console::abs(num_t num)
@@ -410,12 +393,6 @@ inline const char* log_console::get_time(bool color)
 	res[size] = 0;
 	return res;
 }
-
-inline void log_console::lock()
-{ this->mutex.lock(); }
-
-inline void log_console::unlock()
-{ this->mutex.unlock(); }
 
 inline void log_console::setting_stdin()
 {
@@ -485,44 +462,45 @@ inline log_console& operator<<(log_console& logger, log_console::state_change_fu
 	return logger;
 }
 
-inline const std::pair<log_console&, std::true_type>&
-operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::state_change_function state_change_function)
+inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+		std::shared_ptr<std::pair<log_console&, std::true_type>> logger, log_console::state_change_function state_change_function)
 {
-	logger.first.time = false;
-	logger.first.location = false;
-	state_change_function(logger.first);
+	logger->first.time = false;
+	logger->first.location = false;
+	state_change_function(logger->first);
 	return logger;
 }
 
 template <typename T>
-inline const std::pair<log_console&, log_console::val_set_function<T>>&
-operator<<(log_console& logger, log_console::val_set_function<T> val_set_function)
+inline const std::pair<log_console&, log_console::val_set_function<T>>& operator<<(
+		log_console& logger, log_console::val_set_function<T> val_set_function)
 {
 	logger.time = false;
 	logger.location = false;
-	return *new std::remove_cvref_t<decltype(operator<<(logger, val_set_function))>(logger, val_set_function);
+	return std::make_shared<remove_smart<decltype(operator<<(logger, val_set_function))>>(logger, std::true_type());
 }
 
 template <typename T>
-inline const std::pair<log_console&, log_console::val_set_function<T>>&
-operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::val_set_function<T> val_set_function)
+inline const std::pair<log_console&, log_console::val_set_function<T>>& operator<<(
+		std::shared_ptr<std::pair<log_console&, std::true_type>> logger, log_console::val_set_function<T> val_set_function)
 {
-	logger.first.time = false;
-	logger.first.location = false;
-	return *new std::remove_cvref_t<decltype(operator<<(logger, val_set_function))>{logger.first, val_set_function};
+	logger->first.time = false;
+	logger->first.location = false;
+	return std::make_shared<remove_smart<decltype(operator<<(logger, val_set_function))>>(logger->first, val_set_function);
 }
 
 template <typename T>
-inline const std::pair<log_console&, std::true_type>&
-operator<<(const std::pair<log_console&, log_console::val_set_function<T>>& logger, T val)
+inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+		std::shared_ptr<std::pair<log_console&, log_console::val_set_function<T>>> logger, T val)
 {
-	logger.first.time = false;
-	logger.first.location = false;
-	logger.second(logger.first, val);
-	return *new std::remove_cvref_t<decltype(operator<<(logger, val))>{logger.first, std::true_type()};
+	logger->first.time = false;
+	logger->first.location = false;
+	logger->second(logger.first, val);
+	return std::make_shared<remove_smart<decltype(operator<<(logger, val))>>(logger.first, std::true_type());
 }
 
-inline const std::pair<log_console&, std::true_type>& operator<<(log_console& logger, const std::remove_cvref_t<decltype(l_location)>& location)
+inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+		log_console& logger, const std::remove_cvref_t<decltype(l_location)>& location)
 {
 	if (logger.is_logging_on)
 	{
@@ -543,74 +521,33 @@ inline const std::pair<log_console&, std::true_type>& operator<<(log_console& lo
 		logger.time = false;
 		logger.location = true;
 	}
-	return *new std::remove_cvref_t<decltype(operator<<(logger, l_location))>{logger, std::true_type()};
+	return std::make_shared<remove_smart<decltype(operator<<(logger, l_location))>>(logger, std::true_type());
 }
 
-inline const std::pair<log_console&, std::true_type>&
-operator<<(const std::pair<log_console&, std::true_type>& logger, const decltype(l_location)& location)
+inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+		std::shared_ptr<std::pair<log_console&, std::true_type>> logger, const decltype(l_location)& location)
 {
-	if (logger.first.is_logging_on)
+	if (logger->first.is_logging_on)
 	{
-		if (logger.first.colorful)
+		if (logger->first.colorful)
 		{
-			logger.first.print((logger.first.time ? std::string() : std::string("\n")) + log_console::color_l_location + location.first +
-							   log_console::color_l_location_separator + "::" + log_console::color_l_location + location.second.first + "()" +
-							   log_console::color_l_location_separator + "::" + log_console::color_l_location +
-							   std::to_string(location.second.second) +
-							   color::reset + "\n+--> "
+			logger->first.print((logger->first.time ? std::string() : std::string("\n")) + log_console::color_l_location + location.first +
+								log_console::color_l_location_separator + "::" + log_console::color_l_location + location.second.first + "()" +
+								log_console::color_l_location_separator + "::" + log_console::color_l_location +
+								std::to_string(location.second.second) +
+								color::reset + "\n+--> "
 			);
 		}
 		else
 		{
-			logger.first.print((logger.first.time ? std::string() : std::string("\n")) + location.first + "::" + location.second.first + "()" +
-							   "::" + std::to_string(location.second.second) + "\n+--> "
+			logger->first.print((logger->first.time ? std::string() : std::string("\n")) + location.first + "::" + location.second.first + "()" +
+								"::" + std::to_string(location.second.second) + "\n+--> "
 			);
 		}
-		logger.first.time = false;
-		logger.first.location = true;
+		logger->first.time = false;
+		logger->first.location = true;
 	}
 	return logger;
-}
-
-[[deprecated]]inline const std::pair<log_console&, std::true_type>& operator<<(log_console& logger, const std::remove_cvref_t<decltype(l_time)>& time)
-{
-	if (logger.is_logging_on)
-	{
-		if (logger.colorful)
-		{
-			logger.print(
-					(logger.time ? std::string() : std::string("\n")) + log_console::color_l_time + time.first + log_console::color_l_time_separator +
-					"::" + log_console::color_l_time + time.second + color::reset + "\t"
-			);
-		}
-		else
-		{
-			logger.print((logger.time ? std::string() : std::string("\n")) + time.first + "::" + time.second + "\t");
-		}
-		logger.time = true;
-		logger.location = false;
-	}
-	return *new std::remove_cvref_t<decltype(operator<<(logger, l_time))>{logger, std::true_type()};
-}
-
-[[deprecated]]inline log_console& operator<<(const std::pair<log_console&, std::true_type>& logger, const decltype(l_time)& time)
-{
-	if (logger.first.is_logging_on)
-	{
-		if (logger.first.colorful)
-		{
-			logger.first.print((logger.first.location ? std::string() : std::string("\n")) + log_console::color_l_time + time.first +
-							   log_console::color_l_time_separator + "  " + log_console::color_l_time + time.second + color::reset + "\t"
-			);
-		}
-		else
-		{
-			logger.first.print((logger.first.location ? std::string() : std::string("\n")) + time.first + "  " + time.second + "\t");
-		}
-		logger.first.time = true;
-		logger.first.location = false;
-	}
-	return logger.first;
 }
 
 inline log_console& operator<<(log_console& logger, const std::string& str)
@@ -624,27 +561,65 @@ inline log_console& operator<<(log_console& logger, const std::string& str)
 	return logger;
 }
 
-inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, const std::string& str)
+inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+		std::shared_ptr<std::pair<log_console&, std::true_type>> logger, const std::string& str)
 {
-	if (logger.first.is_logging_on)
+	if (logger->first.is_logging_on)
 	{
-		if (logger.first.enablearrow)
+		if (logger->first.enablearrow)
 		{
 			std::string copy;
 			for (auto& i: str)
 			{
 				copy += i;
 				if (i == '\n')
-				{ copy += log_console::log_arrow; }
+					copy += log_console::log_arrow;
 			}
-			logger.first.print(copy);
+			logger->first.print(copy);
 		}
 		else
 		{
-			logger.first.print(str);
+			logger->first.print(str);
 		}
-		logger.first.time = false;
-		logger.first.location = false;
+		logger->first.time = false;
+		logger->first.location = false;
+	}
+	return logger;
+}
+
+inline log_console& operator<<(log_console& logger, const std::wstring& str)
+{
+	if (logger.is_logging_on)
+	{
+		logger.print(str);
+		logger.time = false;
+		logger.location = false;
+	}
+	return logger;
+}
+
+inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+		std::shared_ptr<std::pair<log_console&, std::true_type>> logger, const std::wstring& str)
+{
+	if (logger->first.is_logging_on)
+	{
+		if (logger->first.enablearrow)
+		{
+			std::string copy;
+			for (auto& i: str)
+			{
+				copy += i;
+				if (i == '\n')
+					copy += log_console::log_arrow;
+			}
+			logger->first.print(copy);
+		}
+		else
+		{
+			logger->first.print(str);
+		}
+		logger->first.time = false;
+		logger->first.location = false;
 	}
 	return logger;
 }
@@ -660,11 +635,12 @@ inline log_console& operator<<(log_console& logger, const char* str)
 	return logger;
 }
 
-inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, const char* str)
+inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+		std::shared_ptr<std::pair<log_console&, std::true_type>> logger, const char* str)
 {
-	if (logger.first.is_logging_on)
+	if (logger->first.is_logging_on)
 	{
-		if (logger.first.enablearrow)
+		if (logger->first.enablearrow)
 		{
 			std::string copy;
 			for (; *str; ++str)
@@ -673,14 +649,14 @@ inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair
 				if (*str == '\n')
 				{ copy += log_console::log_arrow; }
 			}
-			logger.first.print(copy);
+			logger->first.print(copy);
 		}
 		else
 		{
-			logger.first.print(str);
+			logger->first.print(str);
 		}
-		logger.first.time = false;
-		logger.first.location = false;
+		logger->first.time = false;
+		logger->first.location = false;
 	}
 	return logger;
 }
@@ -702,19 +678,20 @@ inline log_console& operator<<(log_console& logger, const void* ptr)
 	return logger;
 }
 
-inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, const void* ptr)
+inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+		std::shared_ptr<std::pair<log_console&, std::true_type>> logger, const void* ptr)
 {
-	if (logger.first.is_logging_on)
+	if (logger->first.is_logging_on)
 	{
-		logger.first.print(color::reset);
-		logger.first.print(color::yellow_bg);
-		logger.first.print(color::bold);
-		logger.first.print(color::black);
-		logger.first.print("0x");
-		logger.first.print(log_console::integral_to_string(reinterpret_cast<unsigned long>(ptr), 0x10));
-		logger.first.print(color::reset);
-		logger.first.time = false;
-		logger.first.location = false;
+		logger->first.print(color::reset);
+		logger->first.print(color::yellow_bg);
+		logger->first.print(color::bold);
+		logger->first.print(color::black);
+		logger->first.print("0x");
+		logger->first.print(log_console::integral_to_string(reinterpret_cast<unsigned long>(ptr), 0x10));
+		logger->first.print(color::reset);
+		logger->first.time = false;
+		logger->first.location = false;
 	}
 	return logger;
 }
@@ -740,22 +717,24 @@ inline log_console& operator<<(log_console& logger, bool boolean)
 	return logger;
 }
 
-inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, bool boolean)
+inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+		std::shared_ptr<std::pair<log_console&, std::true_type>> logger, bool boolean)
 {
-	if (logger.first.is_logging_on)
+	if (logger->first.is_logging_on)
 	{
-		if (logger.first.colorful)
+		if (logger->first.colorful)
 		{
-			logger.first.print((boolean ? std::string(log_console::color_bool_true) + " true" : std::string(log_console::color_bool_false) + " false")
-							   + color::reset
-			);
+			logger->first
+				  .print((boolean ? std::string(log_console::color_bool_true) + " true" : std::string(log_console::color_bool_false) + " false")
+						 + color::reset
+				  );
 		}
 		else
 		{
-			logger.first.print(boolean ? " true" : " false");
+			logger->first.print(boolean ? " true" : " false");
 		}
-		logger.first.time = false;
-		logger.first.location = false;
+		logger->first.time = false;
+		logger->first.location = false;
 	}
 	return logger;
 }
@@ -806,53 +785,55 @@ inline log_console& operator<<(log_console& logger, log_console::l_flags flag)
 	return logger;
 }
 
-inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::l_flags flag)
+inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+		std::shared_ptr<std::pair<log_console&, std::true_type>> logger, log_console::l_flags flag)
 {
-	if (logger.first.is_logging_on)
+	if (logger->first.is_logging_on)
 	{
 		switch (flag)
 		{
 			case log_console::l_flags::l_lock:
-				logger.first.lock();
+				logger->first.lock();
 				break;
 			case log_console::l_flags::l_unlock:
-				logger.first.unlock();
+				logger->first.unlock();
 				break;
 			case log_console::l_flags::l_flush:
-				logger.first.flush();
+				logger->first.flush();
 				break;
 			case log_console::l_flags::l_endl:
-				logger.first.print("\n");
-				logger.first.flush();
+				logger->first.print("\n");
+				logger->first.flush();
 				break;
 			case log_console::l_flags::l_locendl:
-				logger.first.print("\n");
-				logger.first.print(log_console::log_arrow);
-				logger.first.flush();
+				logger->first.print("\n");
+				logger->first.print(log_console::log_arrow);
+				logger->first.flush();
 				break;
 			case log_console::l_flags::l_endent:
-				logger.first.print("\n");
-				logger.first.flush();
-				logger.first.unlock();
+				logger->first.print("\n");
+				logger->first.flush();
+				logger->first.unlock();
 				break;
 			case log_console::l_flags::l_color:
-				logger.first.colorful = true;
+				logger->first.colorful = true;
 				break;
 			case log_console::l_flags::l_nocolor:
-				logger.first.colorful = false;
+				logger->first.colorful = false;
 				break;
 			case log_console::l_flags::l_nlarrow:
-				logger.first.enablearrow = true;
+				logger->first.enablearrow = true;
 				break;
 			case log_console::l_flags::l_nonlarrow:
-				logger.first.enablearrow = false;
+				logger->first.enablearrow = false;
 				break;
 		}
 	}
 	return logger;
 }
 
-inline const std::pair<log_console&, std::true_type>& operator<<(log_console& logger, log_console::l_special_flag flag)
+inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+		log_console& logger, log_console::l_special_flag flag)
 {
 	if (logger.is_logging_on)
 	{
@@ -864,20 +845,20 @@ inline const std::pair<log_console&, std::true_type>& operator<<(log_console& lo
 			logger.location = false;
 		}
 	}
-	return *new std::remove_cvref_t<decltype(operator<<(logger, flag))>{logger, std::true_type()};
+	return std::make_shared<remove_smart<decltype(operator<<(logger, flag))>>(logger, std::true_type());
 }
 
-inline const std::pair<log_console&, std::true_type>&
-operator<<(const std::pair<log_console&, std::true_type>& logger, log_console::l_special_flag flag)
+inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+		std::shared_ptr<std::pair<log_console&, std::true_type>> logger, log_console::l_special_flag flag)
 {
-	if (logger.first.is_logging_on)
+	if (logger->first.is_logging_on)
 	{
 		if (flag.val == log_console::l_localtime.val)
 		{
-			auto time = log_console::get_time(logger.first.colorful);
-			logger.first.print(time);
-			logger.first.time = true;
-			logger.first.location = false;
+			auto time = log_console::get_time(logger->first.colorful);
+			logger->first.print(time);
+			logger->first.time = true;
+			logger->first.location = false;
 		}
 	}
 	return logger;
@@ -918,33 +899,34 @@ inline log_console& operator<<(log_console& logger, num_t num)
 }
 
 template <arithmetic num_t>
-inline const std::pair<log_console&, std::true_type>& operator<<(const std::pair<log_console&, std::true_type>& logger, num_t num)
+inline std::shared_ptr<std::pair<log_console&, std::true_type>> operator<<(
+		std::shared_ptr<std::pair<log_console&, std::true_type>> logger, num_t num)
 {
-	if (logger.first.is_logging_on)
+	if (logger->first.is_logging_on)
 	{
-		logger.first.time = false;
-		logger.first.location = false;
+		logger->first.time = false;
+		logger->first.location = false;
 		
 		if constexpr(std::is_same_v<num_t, char>)
 		{
-			logger.first.print(num);
+			logger->first.print(num);
 		}
 		else if constexpr(std::is_integral_v<num_t>)
 		{
-			if (logger.first.colorful)
-				logger.first.print(log_console::color_int_t + log_console::integral_to_string(num, logger.first.base) + color::reset);
+			if (logger->first.colorful)
+				logger->first.print(log_console::color_int_t + log_console::integral_to_string(num, logger->first.base) + color::reset);
 			else
-				logger.first.print(log_console::integral_to_string(num, logger.first.base));
+				logger->first.print(log_console::integral_to_string(num, logger->first.base));
 		}
 		else if constexpr(std::is_floating_point_v<num_t>)
 		{
-			if (logger.first.colorful)
-				logger.first.print(log_console::color_float_t + std::to_string(num) + color::reset);
+			if (logger->first.colorful)
+				logger->first.print(log_console::color_float_t + std::to_string(num) + color::reset);
 			else
-				logger.first.print(std::to_string(num));
+				logger->first.print(std::to_string(num));
 		}
 	}
 	return logger;
 }
 
-#endif //KAZKUEME_LOG_CONSOLE_HPP
+#endif //LOG_CONSOLE
