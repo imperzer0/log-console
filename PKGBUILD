@@ -10,7 +10,7 @@ license=('GPL')
 
 _srcprefix="local:/"
 _libfiles=("$pkgname" "$pkgname""-defs")
-md5sums=("1042a793b5481de07262fccd09e2a2f9" "2fd9a98d504fba82afbc322976c6e4b6")
+md5sums=("a727176f5d208daceb4a9aab4b15cfad" "2fd9a98d504fba82afbc322976c6e4b6")
 
 # add all library files to sources
 for _libfile in ${_libfiles[@]}
