@@ -5,7 +5,7 @@
 #ifndef LOG_CONSOLE_LOG_CONSOLE_DEFS_
 #define LOG_CONSOLE_LOG_CONSOLE_DEFS_
 
-#include <log-console>
+#include "log-console"
 
 namespace _detail_::log_console
 {
